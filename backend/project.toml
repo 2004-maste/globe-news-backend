@@ -1,0 +1,18 @@
+[_]
+schema-version = "0.2"
+
+[[build.env]]
+name = "BP_ENABLE_RUNTIME"
+value = "true"
+
+[[build.env]]
+name = "BP_PYTHON_VERSION"
+value = "3.11.9"
+
+[[buildpacks]]
+id = "heroku/python"
+version = "0.9.1"
+
+[[buildpacks]]
+id = "heroku/procfile"
+version = "3.0.1"
