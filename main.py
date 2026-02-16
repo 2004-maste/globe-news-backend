@@ -26,6 +26,8 @@ import html
 import ssl
 from app.database import init_db
 
+DB_PATH = os.environ.get('DB_PATH', '/app/data/globe_news.db')
+
 # ✅ NEW: Import for content extraction (install with: pip install readability-lxml)
 try:
     from readability import Document
@@ -39,13 +41,12 @@ logger = logging.getLogger(__name__)
 
 # ==================== DATABASE SETUP ====================
 
-DB_PATH = os.environ.get('DB_PATH', '/app/data/globe_news.db')
 
 def init_database():
     """Initialize SQLite database with proper schema and handle upgrades."""
     try:
         logger.info("Initializing database...")
-        conn = sqlite3.connect('/app/data/globe_news.db')
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         cursor = conn.cursor()
         
         # Create categories table
@@ -154,7 +155,7 @@ def init_database():
 
 def get_db_connection():
     """Get database connection."""
-    conn = sqlite3.connect('/app/data/globe_news.db', check_same_thread=False)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
