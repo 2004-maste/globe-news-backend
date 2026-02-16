@@ -37,9 +37,6 @@ except ImportError:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-#ADMIN ROUTES
-app.include_router(admin.router)
-
 # ==================== DATABASE SETUP ====================
 
 def init_database():
@@ -69,13 +66,23 @@ def init_database():
             url_to_image TEXT,
             published_at TIMESTAMP NOT NULL,
             content TEXT,
-            full_content TEXT,  # ✅ NEW: Store full article content
+            full_content TEXT,
             preview_content TEXT,
             category_id INTEGER,
             source TEXT,
             author TEXT,
             language TEXT DEFAULT 'en',
             is_breaking BOOLEAN DEFAULT 0,
+            is_approved BOOLEAN DEFAULT 0,
+            is_rejected BOOLEAN DEFAULT 0,
+            is_edited BOOLEAN DEFAULT 0,
+            approved_at DATETIME,
+            approved_by TEXT,
+            rejected_at DATETIME,
+            rejected_by TEXT,
+            edited_at DATETIME,
+            edited_by TEXT,
+            editor_notes TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (category_id) REFERENCES categories (id)
         )
@@ -88,8 +95,18 @@ def init_database():
         # List of expected columns
         expected_columns = [
             ('preview_content', 'TEXT'),
-            ('full_content', 'TEXT'),  # ✅ NEW
-            ('is_breaking', 'BOOLEAN DEFAULT 0')
+            ('full_content', 'TEXT'),
+            ('is_breaking', 'BOOLEAN DEFAULT 0'),
+            ('is_approved', 'BOOLEAN DEFAULT 0'),
+            ('is_rejected', 'BOOLEAN DEFAULT 0'),
+            ('is_edited', 'BOOLEAN DEFAULT 0'),
+            ('approved_at', 'DATETIME'),
+            ('approved_by', 'TEXT'),
+            ('rejected_at', 'DATETIME'),
+            ('rejected_by', 'TEXT'),
+            ('edited_at', 'DATETIME'),
+            ('edited_by', 'TEXT'),
+            ('editor_notes', 'TEXT')
         ]
         
         for column_name, column_type in expected_columns:
@@ -104,6 +121,7 @@ def init_database():
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_articles_language ON articles(language)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_articles_published ON articles(published_at)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_articles_category ON articles(category_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_articles_approved ON articles(is_approved)')
         
         # Insert default categories
         default_categories = [
@@ -147,7 +165,7 @@ RSS_FEEDS = [
         'url': 'https://feeds.bbci.co.uk/news/rss.xml',
         'language': 'en',
         'category': 'General',
-        'extract_content': True  # ✅ NEW: Flag for content extraction
+        'extract_content': True
     },
     {
         'name': 'BBC World',
@@ -270,29 +288,27 @@ RSS_FEEDS = [
         'category': 'World',
         'extract_content': True
     },
-
     {
-    'name': 'Umusingi',
-    'url': 'https://umusingi.com/feed/',
-    'language': 'rw',
-    'category': 'General',
-    'extract_content': True
+        'name': 'Umusingi',
+        'url': 'https://umusingi.com/feed/',
+        'language': 'rw',
+        'category': 'General',
+        'extract_content': True
     },
     {
-    'name': 'Rwanda News Agency',
-    'url': 'https://www.rnanews.com/rss',
-    'language': 'en',
-    'category': 'General',
-    'extract_content': True
+        'name': 'Rwanda News Agency',
+        'url': 'https://www.rnanews.com/rss',
+        'language': 'en',
+        'category': 'General',
+        'extract_content': True
     },
     {
-    'name': 'Kigali Today',
-    'url': 'https://kigalitoday.com/feed/',
-    'language': 'en',
-    'category': 'General',
-    'extract_content': True
+        'name': 'Kigali Today',
+        'url': 'https://kigalitoday.com/feed/',
+        'language': 'en',
+        'category': 'General',
+        'extract_content': True
     },
-
     {
         'name': 'The EastAfrican',
         'url': 'https://www.theeastafrican.co.ke/rss',
@@ -300,7 +316,6 @@ RSS_FEEDS = [
         'category': 'World',
         'extract_content': True
     },
-
     {
         'name': 'RBA Rwanda',
         'url': 'https://www.rba.co.rw/rss',
@@ -308,7 +323,6 @@ RSS_FEEDS = [
         'category': 'General',
         'extract_content': True
     },
-
     
     # ========== SPORTS SOURCES ==========
     {
@@ -414,7 +428,7 @@ FALLBACK_ARTICLES = [
 class NewsFetcher:
     def __init__(self):
         self.user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        self.timeout = aiohttp.ClientTimeout(total=45)  # ✅ Increased for content extraction
+        self.timeout = aiohttp.ClientTimeout(total=45)
         self.headers = {
             'User-Agent': self.user_agent,
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -501,7 +515,6 @@ class NewsFetcher:
             logger.error(f"Error fetching feed {feed['name']}: {e}")
             return 0
     
-    # ✅ NEW: FULL CONTENT EXTRACTION METHODS
     async def extract_full_content(self, url: str, description: str, source: str) -> str:
         """
         Extract full article content from URL using readability-lxml.
@@ -602,8 +615,8 @@ class NewsFetcher:
         if not description:
             description = entry.get('summary', '')[:500]
         
-        # ✅ NEW: EXTRACT FULL CONTENT
-        full_content = description  # Start with RSS description
+        # Extract full content
+        full_content = description
         if feed.get('extract_content', True):
             try:
                 full_content = await self.extract_full_content(url, description, feed['name'])
@@ -642,25 +655,27 @@ class NewsFetcher:
         cursor.execute('''
             INSERT INTO articles (
                 title, description, url, url_to_image, published_at,
-                content, full_content, category_id, source, author, language
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                content, full_content, category_id, source, author, language,
+                is_approved
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             title,
             description,
             url[:500],
             image_url[:500] if image_url else None,
             published_at.isoformat(),
-            description[:2000],  # Keep original RSS content
-            full_content[:15000] if full_content else description[:2000],  # ✅ Store full content
+            description[:2000],
+            full_content[:15000] if full_content else description[:2000],
             category_id,
             feed['name'],
             author[:200],
-            feed['language']
+            feed['language'],
+            0  # is_approved = False by default
         ))
         
         article_id = cursor.lastrowid
         
-        # ✅ Generate preview with FULL CONTENT
+        # Generate preview with FULL CONTENT
         try:
             preview = ContentAnalyzer.generate_preview(
                 title=title,
@@ -794,8 +809,9 @@ class NewsFetcher:
                 cursor.execute('''
                     INSERT INTO articles (
                         title, description, url, url_to_image, published_at,
-                        content, full_content, category_id, source, author, language
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        content, full_content, category_id, source, author, language,
+                        is_approved
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     article_data['title'],
                     article_data['description'],
@@ -803,11 +819,12 @@ class NewsFetcher:
                     article_data['url_to_image'],
                     article_data['published_at'],
                     article_data['content'],
-                    article_data['content'],  # full_content same as content for fallbacks
+                    article_data['content'],
                     category_id,
                     article_data['source'],
                     article_data['author'],
-                    article_data['language']
+                    article_data['language'],
+                    0  # is_approved = False by default
                 ))
                 
                 saved_count += 1
@@ -879,14 +896,14 @@ class ContentAnalyzer:
         clean_desc = ContentAnalyzer._clean_text(description)
         clean_title = ContentAnalyzer._clean_text(title)
         
-        # ✅ USE FULL CONTENT for analysis
+        # USE FULL CONTENT for analysis
         content_for_analysis = ContentAnalyzer._clean_text(full_content) if full_content and len(full_content) > len(clean_desc) else clean_desc
         
         # Analyze content for key information
         analysis = ContentAnalyzer._analyze_content(
             title=clean_title,
             description=clean_desc,
-            content=content_for_analysis,  # ✅ Now using full content
+            content=content_for_analysis,
             category=category,
             source=source
         )
@@ -908,7 +925,7 @@ class ContentAnalyzer:
                          category: str, source: str) -> Dict:
         """Analyze article content to extract specific information."""
         
-        # ✅ Use full content for better analysis
+        # Use full content for better analysis
         full_text = f"{title}. {content}" if content else f"{title}. {description}"
         text_lower = full_text.lower()
         
@@ -1394,11 +1411,14 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Globe News API",
     description="Global news aggregator with smart content previews and full article extraction",
-    version="6.1.0",  # ✅ Updated version
+    version="6.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan
 )
+
+# ADMIN ROUTES - MOVED HERE (FIXED)
+app.include_router(admin.router)
 
 # CORS middleware
 app.add_middleware(
@@ -1427,11 +1447,9 @@ async def root():
         cursor.execute('SELECT COUNT(*) FROM articles WHERE language = "rw"')
         kinyarwanda = cursor.fetchone()[0]
         
-        # ✅ NEW: Check content extraction stats
         cursor.execute('SELECT COUNT(*) FROM articles WHERE LENGTH(full_content) > LENGTH(content) + 100')
         full_content_extracted = cursor.fetchone()[0]
         
-        # ✅ NEW: Top sources
         cursor.execute('''
             SELECT source, COUNT(*) as count 
             FROM articles 
@@ -1462,7 +1480,8 @@ async def root():
                 "Smart content preview generation",
                 "Multi-language support (English & Kinyarwanda)",
                 "Automatic hourly updates",
-                "Article-specific context analysis"
+                "Article-specific context analysis",
+                "Admin approval workflow for AdSense compliance"
             ],
             "content_extraction": {
                 "library": "readability-lxml (if available)",
@@ -1504,12 +1523,12 @@ async def get_articles(
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Build query
+        # Build query - only show approved articles
         query = '''
             SELECT a.*, c.name as category_name 
             FROM articles a 
             LEFT JOIN categories c ON a.category_id = c.id 
-            WHERE 1=1
+            WHERE a.is_approved = 1
         '''
         params = []
         
@@ -1534,7 +1553,7 @@ async def get_articles(
         articles = cursor.fetchall()
         
         # Get total count
-        count_query = 'SELECT COUNT(*) FROM articles a LEFT JOIN categories c ON a.category_id = c.id WHERE 1=1'
+        count_query = 'SELECT COUNT(*) FROM articles a LEFT JOIN categories c ON a.category_id = c.id WHERE a.is_approved = 1'
         count_params = []
         
         if category:
@@ -1564,7 +1583,7 @@ async def get_articles(
             article_dict.setdefault('preview_content', None)
             article_dict.setdefault('full_content', None)
             
-            # ✅ Add content length info
+            # Add content length info
             if article_dict.get('full_content'):
                 article_dict['content_length'] = len(article_dict['full_content'])
                 article_dict['has_full_content'] = len(article_dict['full_content']) > len(article_dict.get('content', '')) + 100
@@ -1598,7 +1617,7 @@ async def get_article(article_id: int):
             SELECT a.*, c.name as category_name 
             FROM articles a 
             LEFT JOIN categories c ON a.category_id = c.id 
-            WHERE a.id = ?
+            WHERE a.id = ? AND a.is_approved = 1
         ''', (article_id,))
         
         article = cursor.fetchone()
@@ -1632,7 +1651,7 @@ async def get_article(article_id: int):
             SELECT a.*, c.name as category_name 
             FROM articles a 
             LEFT JOIN categories c ON a.category_id = c.id 
-            WHERE a.category_id = ? AND a.id != ? AND a.language = ?
+            WHERE a.category_id = ? AND a.id != ? AND a.language = ? AND a.is_approved = 1
             ORDER BY a.published_at DESC 
             LIMIT 5
         ''', (category_id, article_id, language))
@@ -1671,7 +1690,7 @@ async def get_breaking_articles(limit: int = Query(20, ge=1, le=100)):
             SELECT a.*, c.name as category_name 
             FROM articles a 
             LEFT JOIN categories c ON a.category_id = c.id 
-            WHERE a.published_at > ?
+            WHERE a.published_at > ? AND a.is_approved = 1
             ORDER BY a.published_at DESC 
             LIMIT ?
         ''', (time_threshold, limit))
@@ -1732,9 +1751,11 @@ async def get_fetcher_stats():
         cursor.execute('SELECT COUNT(*) FROM articles WHERE language = "rw"')
         kinyarwanda = cursor.fetchone()[0]
         
-        # ✅ NEW: Content extraction stats
         cursor.execute('SELECT COUNT(*) FROM articles WHERE LENGTH(full_content) > LENGTH(content) + 100')
         full_content_count = cursor.fetchone()[0]
+        
+        cursor.execute('SELECT COUNT(*) FROM articles WHERE is_approved = 0')
+        pending_approval = cursor.fetchone()[0]
         
         cursor.execute('SELECT MAX(published_at) FROM articles')
         latest_date_result = cursor.fetchone()[0]
@@ -1748,9 +1769,11 @@ async def get_fetcher_stats():
             "kinyarwanda_articles": kinyarwanda,
             "full_content_extracted": full_content_count,
             "extraction_rate": f"{(full_content_count/total*100):.1f}%" if total > 0 else "0%",
+            "pending_approval": pending_approval,
             "latest_article_date": latest_date,
             "configured_feeds": len(RSS_FEEDS),
-            "content_extraction_enabled": Document is not None
+            "content_extraction_enabled": Document is not None,
+            "admin_workflow": "Articles require approval before public viewing"
         }
         
     except Exception as e:
@@ -1761,6 +1784,7 @@ async def get_fetcher_stats():
             "kinyarwanda_articles": 0,
             "full_content_extracted": 0,
             "extraction_rate": "0%",
+            "pending_approval": 0,
             "latest_article_date": None,
             "configured_feeds": len(RSS_FEEDS),
             "content_extraction_enabled": Document is not None
@@ -1783,7 +1807,7 @@ async def fetch_now(background_tasks: BackgroundTasks):
     return {
         "message": "News fetch started in background",
         "status": "processing",
-        "note": "Full article content will be extracted where possible"
+        "note": "New articles will require admin approval before appearing on site"
     }
 
 # ==================== CONTENT PREVIEW ENDPOINTS ====================
@@ -1951,28 +1975,5 @@ async def startup_event():
 
 if __name__ == "__main__":
     import uvicorn
-    
-    print("\n" + "="*60)
-    print("🌐 GLOBE NEWS BACKEND v6.1 - Starting Server")
-    print("="*60)
-    print(f"📊 Version: 6.1.0")
-    print(f"🔗 API: http://localhost:8000")
-    print(f"📚 Docs: http://localhost:8000/docs")
-    print(f"🔍 Content Extraction: {'✅ readability-lxml' if Document else '⚠️  fallback only'}")
-    print("="*60)
-    print("⚠️  IMPORTANT: Install readability-lxml for best results:")
-    print("   pip install readability-lxml")
-    print("="*60)
-    
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True
-    )
-
-if __name__ == "__main__":
-    import uvicorn
     port = int(os.getenv("PORT", 8000))
-    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=port)
