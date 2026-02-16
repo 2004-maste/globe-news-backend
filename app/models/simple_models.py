@@ -196,3 +196,29 @@ class SimpleCategory(Base):
             "show_on_homepage": self.show_on_homepage,
             "sort_order": self.sort_order,
         }
+
+class Article(Base):
+    __tablename__ = "articles"
+    
+    # ... existing fields ...
+    
+    # New fields for admin approval
+    is_approved = Column(Boolean, default=False)  # Whether article is approved for public
+    is_rejected = Column(Boolean, default=False)   # Whether article was rejected
+    is_edited = Column(Boolean, default=False)     # Whether article was manually edited
+    
+    approved_at = Column(DateTime, nullable=True)   # When approved
+    approved_by = Column(String, nullable=True)     # Who approved
+    rejected_at = Column(DateTime, nullable=True)   # When rejected
+    rejected_by = Column(String, nullable=True)     # Who rejected
+    edited_at = Column(DateTime, nullable=True)     # Last edit time
+    edited_by = Column(String, nullable=True)       # Who last edited
+    
+    # Editorial notes
+    editor_notes = Column(Text, nullable=True)      # Internal notes for editors
+    
+    # Flag for public visibility (combines approval + other checks)
+    @property
+    def is_public(self):
+        """Check if article should be visible to public"""
+        return self.is_approved and not self.is_rejected
