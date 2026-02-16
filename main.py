@@ -152,7 +152,7 @@ def init_database():
 
 def get_db_connection():
     """Get database connection."""
-    conn = sqlite3.connect('globe_news.db', check_same_thread=False)
+    conn = sqlite3.connect('/app/data/globe_news.db', check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
