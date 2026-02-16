@@ -1,5 +1,5 @@
-# Export the models with proper names - FIXED IMPORT PATH
-from app.models.minimal_models import Article, Category, User, Source
+# Export the models with proper names - REMOVED User since it doesn't exist
+from app.models.minimal_models import Article, Category, Source
 
 # Keep backward compatibility
 NewsArticle = Article
@@ -14,7 +14,6 @@ __all__ = [
     'Article',
     'Source', 
     'Category',
-    'User',
     'NewsArticle',
     'NewsSource',
     'MinimalArticle',
