@@ -2,18 +2,16 @@ import secrets
 from datetime import datetime, timedelta
 from fastapi import HTTPException, Depends, Request
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-import hashlib
-import hmac
+import os
 
 # Simple admin token storage (in memory - restart resets tokens)
-# In production, you'd want this in Redis/DB
 active_tokens = {}
 
 security = HTTPBasic()
 
-# You can change these - store in env variables
-ADMIN_USERNAME = "admin"  # Change this
-ADMIN_PASSWORD = "change_this_now"  # Change this immediately
+# Read from environment variables
+ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'change_this_now')
 
 def verify_admin(credentials: HTTPBasicCredentials = Depends(security)):
     """Basic HTTP auth for admin"""
