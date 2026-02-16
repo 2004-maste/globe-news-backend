@@ -1,10 +1,9 @@
-# Export the models with proper names
-from app.minimal_models import Article, Category, User, Source
+# Export the models with proper names - FIXED IMPORT PATH
+from app.models.minimal_models import Article, Category, User, Source
 
 # Keep backward compatibility
 NewsArticle = Article
 NewsSource = Source
-Category = Category
 
 # Also export the old names for compatibility
 MinimalArticle = Article
@@ -15,6 +14,7 @@ __all__ = [
     'Article',
     'Source', 
     'Category',
+    'User',
     'NewsArticle',
     'NewsSource',
     'MinimalArticle',
