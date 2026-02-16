@@ -24,6 +24,7 @@ import re
 import random
 import html
 import ssl
+from app.database import init_db
 
 # ✅ NEW: Import for content extraction (install with: pip install readability-lxml)
 try:
@@ -1939,6 +1940,12 @@ async def debug_extract_test(url: str = Query(..., description="URL to test cont
             "error": str(e),
             "success": False
         }
+
+@app.on_event("startup")
+async def startup_event():
+    """Run on application startup"""
+    init_db()
+    print("✅ Database initialized")
 
 # ==================== MAIN ENTRY POINT ====================
 
