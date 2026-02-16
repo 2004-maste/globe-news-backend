@@ -39,6 +39,8 @@ logger = logging.getLogger(__name__)
 
 # ==================== DATABASE SETUP ====================
 
+DB_PATH = os.environ.get('DB_PATH', '/app/data/globe_news.db')
+
 def init_database():
     """Initialize SQLite database with proper schema and handle upgrades."""
     try:
