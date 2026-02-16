@@ -37,8 +37,17 @@ async def admin_login(
     from app.admin_auth import ADMIN_USERNAME, ADMIN_PASSWORD
     import secrets
     
-    if secrets.compare_digest(username, ADMIN_USERNAME) and secrets.compare_digest(password, ADMIN_PASSWORD):
+    print(f"DEBUG: Login attempt - username: {username}, password: {password}")
+    print(f"DEBUG: Expected - username: {ADMIN_USERNAME}, password: {ADMIN_PASSWORD}")
+    
+    username_match = secrets.compare_digest(username, ADMIN_USERNAME)
+    password_match = secrets.compare_digest(password, ADMIN_PASSWORD)
+    
+    print(f"DEBUG: username_match: {username_match}, password_match: {password_match}")
+    
+    if username_match and password_match:
         token = create_session_token(username)
+        print(f"DEBUG: Login successful, token created: {token[:10]}...")
         response = RedirectResponse(url="/admin/dashboard", status_code=303)
         response.set_cookie(
             key="admin_token",
@@ -50,6 +59,7 @@ async def admin_login(
         )
         return response
     
+    print("DEBUG: Login failed")
     return templates.TemplateResponse(
         "login.html",
         {"request": request, "error": "Invalid credentials"},
@@ -328,4 +338,3 @@ async def admin_settings(request: Request):
             "admin": admin
         }
     )
-  
