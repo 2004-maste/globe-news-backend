@@ -43,7 +43,7 @@ def init_database():
     """Initialize SQLite database with proper schema and handle upgrades."""
     try:
         logger.info("Initializing database...")
-        conn = sqlite3.connect('globe_news.db')
+        conn = sqlite3.connect('/app/data/globe_news.db')
         cursor = conn.cursor()
         
         # Create categories table
