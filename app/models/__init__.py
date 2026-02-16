@@ -1,5 +1,5 @@
 # Export the models with proper names
-from .minimal_models import Article, Category, User, Source
+from app.minimal_models import Article, Category, User, Source
 
 # Keep backward compatibility
 NewsArticle = Article
