@@ -13,6 +13,7 @@ from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
+from app.routes import admin
 import aiohttp
 import feedparser
 import asyncio
@@ -34,6 +35,9 @@ except ImportError:
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+#ADMIN ROUTES
+app.include_router(admin.router)
 
 # ==================== DATABASE SETUP ====================
 
