@@ -26,27 +26,6 @@ class Category(Base):
         return f"<Category {self.name}>"
 
 
-class Source(Base):
-    __tablename__ = "sources"
-    
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
-    url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    country: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    language: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    reliability_score: Mapped[int] = mapped_column(Integer, default=5)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    last_fetched: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    fetch_frequency: Mapped[int] = mapped_column(Integer, default=30)  # minutes
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    
-    # Relationships
-    articles: Mapped[List["Article"]] = relationship("Article", back_populates="source_rel")
-    
-    def __repr__(self):
-        return f"<Source {self.name}>"
-
-
 class Article(Base):
     __tablename__ = "articles"
     
@@ -66,9 +45,11 @@ class Article(Base):
     published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     author: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     
-    # Foreign keys
-    source_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("sources.id"), nullable=True)
+    # Foreign key - only category_id exists in database
     category_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("categories.id"), nullable=True)
+    
+    # Source is a TEXT field in the database, not a foreign key
+    source: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     
     # Additional fields
     country: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -102,8 +83,7 @@ class Article(Base):
     # Editorial notes
     editor_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)           # Internal notes for editors
     
-    # Relationships
-    source_rel: Mapped[Optional["Source"]] = relationship("Source", back_populates="articles")
+    # Relationships - only category relationship remains
     category_rel: Mapped[Optional["Category"]] = relationship("Category", back_populates="articles")
     
     @property
@@ -121,24 +101,16 @@ class Article(Base):
         """For backward compatibility"""
         return self.category_rel
     
-    @property
-    def source(self):
-        """For backward compatibility"""
-        return self.source_rel
-    
     def __repr__(self):
         return f"<Article {self.title[:50]}...>"
 
 
 # For backward compatibility and easier imports
 NewsArticle = Article
-NewsSource = Source
 
 __all__ = [
     'Base',
     'Article',
     'Category',
-    'Source',
-    'NewsArticle',
-    'NewsSource'
+    'NewsArticle'
 ]
