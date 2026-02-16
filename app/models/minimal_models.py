@@ -54,7 +54,7 @@ class Article(Base):
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # RSS description/summary
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Alias for summary
-
+    
     # Content fields
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # RSS content/snippet
     full_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Extracted full article
@@ -62,8 +62,7 @@ class Article(Base):
     
     # Article metadata
     url: Mapped[str] = mapped_column(String(1000), nullable=False, unique=True)
-    image_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
-    url_to_image: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)  # Alias for image_url
+    url_to_image: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)  # Main image field
     published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     author: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     
@@ -108,6 +107,11 @@ class Article(Base):
     category_rel: Mapped[Optional["Category"]] = relationship("Category", back_populates="articles")
     
     @property
+    def image_url(self):
+        """Compatibility property - maps image_url to url_to_image"""
+        return self.url_to_image
+    
+    @property
     def is_public(self):
         """Check if article should be visible to public"""
         return self.is_approved and not self.is_rejected
@@ -129,7 +133,6 @@ class Article(Base):
 # For backward compatibility and easier imports
 NewsArticle = Article
 NewsSource = Source
-Category = Category
 
 __all__ = [
     'Base',
