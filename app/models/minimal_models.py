@@ -54,17 +54,7 @@ class Article(Base):
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # RSS description/summary
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Alias for summary
-    
-    # AI-generated 6-paragraph summary fields
-    ai_summary_1: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    ai_summary_2: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    ai_summary_3: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    ai_summary_4: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    ai_summary_5: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    ai_summary_6: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    ai_summary_generated: Mapped[bool] = mapped_column(Boolean, default=False)
-    ai_summary_generated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    
+
     # Content fields
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # RSS content/snippet
     full_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Extracted full article
