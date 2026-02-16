@@ -7,7 +7,7 @@ from typing import Optional
 import os
 
 from app.database import get_db
-from app.models import Article, Category
+from app.models import Article, Category, User
 from app.admin_auth import verify_admin, create_session_token, get_current_admin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
