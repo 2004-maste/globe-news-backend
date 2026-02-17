@@ -1,61 +1,183 @@
-cat > /app/app/templates/admin/pending_articles.html << 'EOF'
-{% extends "admin/base_admin.html" %}
-{% block title %}Pending Articles - Globe News Admin{% endblock %}
+{% extends "base_admin.html" %}
+{% block title %}Pending Articles{% endblock %}
+{% block page_title %}Pending Articles ({{ total }}){% endblock %}
+
 {% block content %}
-<div class="container-fluid">
-    <h1 class="h3 mb-4">Pending Articles ({{ total }})</h1>
-    
-    <div class="card">
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Title</th>
-                            <th>Source</th>
-                            <th>Category</th>
-                            <th>Published</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for article in articles %}
-                        <tr>
-                            <td>{{ article.id }}</td>
-                            <td>{{ article.title[:50] }}...</td>
-                            <td>{{ article.source }}</td>
-                            <td>{{ article.category_rel.name if article.category_rel else 'Uncategorized' }}</td>
-                            <td>{{ article.published_at }}</td>
-                            <td>
-                                <a href="/admin/articles/{{ article.id }}/review" class="btn btn-sm btn-primary">Review</a>
-                                <form method="post" action="/admin/articles/{{ article.id }}/approve" style="display:inline;">
-                                    <button type="submit" class="btn btn-sm btn-success">Approve</button>
+<div class="card">
+    <div class="card-header">
+        <h5><i class="fas fa-clock me-2"></i>Articles Awaiting Review</h5>
+        <div>
+            <span class="badge bg-warning me-2">{{ total }} Total</span>
+            <span class="badge bg-info">{{ articles|length }} on this page</span>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if articles %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Title</th>
+                        <th>Source</th>
+                        <th>Category</th>
+                        <th>Published</th>
+                        <th>Content</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for article in articles %}
+                    <tr>
+                        <td><span class="badge badge-info">#{{ article.id }}</span></td>
+                        <td>
+                            <strong>{{ article.title[:60] }}{% if article.title|length > 60 %}...{% endif %}</strong>
+                            {% if article.is_breaking %}
+                            <span class="badge bg-danger ms-2">BREAKING</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge" style="background: #e9ecef; color: #495057;">
+                                <i class="fas fa-rss me-1"></i>{{ article.source or 'Unknown' }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge" style="background: #dbeafe; color: #1e40af;">
+                                {{ article.category_rel.name if article.category_rel else 'Uncategorized' }}
+                            </span>
+                        </td>
+                        <td>
+                            <small>
+                                <i class="far fa-calendar-alt me-1"></i>
+                                {{ article.published_at[:10] if article.published_at else 'N/A' }}
+                                <br>
+                                <i class="far fa-clock me-1"></i>
+                                {{ article.published_at[11:16] if article.published_at else '' }}
+                            </small>
+                        </td>
+                        <td>
+                            {% if article.full_content %}
+                            <span class="badge bg-success" title="Full content available">
+                                <i class="fas fa-file-alt me-1"></i>Full
+                            </span>
+                            {% else %}
+                            <span class="badge bg-warning" title="Only summary available">
+                                <i class="fas fa-file me-1"></i>Summary
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="/admin/articles/{{ article.id }}/review" 
+                                   class="btn btn-sm btn-info" 
+                                   title="Review Article"
+                                   data-bs-toggle="tooltip">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <form method="post" action="/admin/articles/{{ article.id }}/approve" 
+                                      style="display: inline;" 
+                                      onsubmit="return confirm('Approve this article? It will appear on the public site.')">
+                                    <button type="submit" class="btn btn-sm btn-success" title="Approve">
+                                        <i class="fas fa-check"></i>
+                                    </button>
                                 </form>
-                                <form method="post" action="/admin/articles/{{ article.id }}/reject" style="display:inline;">
-                                    <button type="submit" class="btn btn-sm btn-danger">Reject</button>
+                                <form method="post" action="/admin/articles/{{ article.id }}/reject" 
+                                      style="display: inline;"
+                                      onsubmit="return confirm('Reject this article? It will be hidden.')">
+                                    <button type="submit" class="btn btn-sm btn-danger" title="Reject">
+                                        <i class="fas fa-times"></i>
+                                    </button>
                                 </form>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            
-            <!-- Pagination -->
-            {% if total_pages > 1 %}
-            <nav>
-                <ul class="pagination">
-                    {% for p in range(1, total_pages + 1) %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if total_pages > 1 %}
+        <nav aria-label="Page navigation" class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if page > 1 %}
+                <li class="page-item">
+                    <a class="page-link" href="/admin/articles/pending?page={{ page-1 }}" aria-label="Previous">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for p in range(1, total_pages + 1) %}
+                    {% if p >= page-2 and p <= page+2 %}
                     <li class="page-item {% if p == page %}active{% endif %}">
                         <a class="page-link" href="/admin/articles/pending?page={{ p }}">{{ p }}</a>
                     </li>
-                    {% endfor %}
-                </ul>
-            </nav>
-            {% endif %}
+                    {% endif %}
+                {% endfor %}
+
+                {% if page < total_pages %}
+                <li class="page-item">
+                    <a class="page-link" href="/admin/articles/pending?page={{ page+1 }}" aria-label="Next">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center py-5">
+            <div class="mb-4">
+                <i class="fas fa-check-circle fa-5x" style="color: #10b981;"></i>
+            </div>
+            <h4>No Pending Articles</h4>
+            <p class="text-muted">All articles have been reviewed. Great job!</p>
+            <a href="/admin/dashboard" class="btn btn-primary mt-3">
+                <i class="fas fa-home me-2"></i>Back to Dashboard
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Bulk Actions -->
+{% if articles %}
+<div class="card mt-4">
+    <div class="card-header">
+        <h5><i class="fas fa-tasks me-2"></i>Bulk Actions</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <form method="post" action="/admin/articles/bulk-approve" 
+                      onsubmit="return confirm('Approve all pending articles?')">
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="fas fa-check-circle me-2"></i>Approve All Pending
+                    </button>
+                </form>
+            </div>
+            <div class="col-md-6">
+                <form method="post" action="/admin/articles/bulk-reject" 
+                      onsubmit="return confirm('Reject all pending articles?')">
+                    <button type="submit" class="btn btn-danger w-100">
+                        <i class="fas fa-times-circle me-2"></i>Reject All Pending
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
 </div>
+{% endif %}
 {% endblock %}
-EOF
+
+{% block scripts %}
+<script>
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    });
+</script>
+{% endblock %}
