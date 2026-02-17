@@ -1,62 +1,120 @@
-cat > /app/app/templates/admin/categories.html << 'EOF'
-{% extends "admin/base_admin.html" %}
-{% block title %}Categories - Globe News Admin{% endblock %}
+{% extends "base_admin.html" %}
+{% block title %}Categories{% endblock %}
+{% block page_title %}Category Management{% endblock %}
+
 {% block content %}
-<div class="container-fluid">
-    <h1 class="h3 mb-4">Manage Categories</h1>
-    
-    <div class="row">
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5>Add New Category</h5>
-                </div>
-                <div class="card-body">
-                    <form method="post" action="/admin/categories/add">
-                        <div class="mb-3">
-                            <label for="name" class="form-label">Category Name</label>
-                            <input type="text" class="form-control" id="name" name="name" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="description" class="form-label">Description</label>
-                            <textarea class="form-control" id="description" name="description" rows="3"></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Add Category</button>
-                    </form>
-                </div>
+<div class="row">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-plus-circle me-2"></i>Add New Category</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="/admin/categories/add">
+                    <div class="form-group mb-3">
+                        <label for="name" class="form-label">
+                            <i class="fas fa-tag me-1"></i>Category Name
+                        </label>
+                        <input type="text" class="form-control" id="name" name="name" 
+                               placeholder="e.g., Technology" required>
+                    </div>
+                    
+                    <div class="form-group mb-4">
+                        <label for="description" class="form-label">
+                            <i class="fas fa-align-left me-1"></i>Description
+                        </label>
+                        <textarea class="form-control" id="description" name="description" 
+                                  rows="4" placeholder="Brief description of this category..."></textarea>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-save me-2"></i>Create Category
+                    </button>
+                </form>
             </div>
         </div>
-        
-        <div class="col-md-8">
-            <div class="card">
-                <div class="card-header">
-                    <h5>Existing Categories</h5>
-                </div>
-                <div class="card-body">
-                    <table class="table">
+    </div>
+    
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-list me-2"></i>Existing Categories</h5>
+                <span class="badge bg-primary">{{ categories|length }} Total</span>
+            </div>
+            <div class="card-body">
+                {% if categories %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
                         <thead>
                             <tr>
                                 <th>ID</th>
                                 <th>Name</th>
                                 <th>Description</th>
+                                <th>Created</th>
                                 <th>Articles</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for category in categories %}
                             <tr>
-                                <td>{{ category.id }}</td>
-                                <td>{{ category.name }}</td>
-                                <td>{{ category.description }}</td>
-                                <td>{{ category.articles|length }}</td>
+                                <td><span class="badge badge-info">#{{ category.id }}</span></td>
+                                <td>
+                                    <strong>{{ category.name }}</strong>
+                                </td>
+                                <td>
+                                    <small>{{ category.description or 'No description' }}</small>
+                                </td>
+                                <td>
+                                    <small>
+                                        <i class="far fa-calendar-alt me-1"></i>
+                                        {{ category.created_at[:10] if category.created_at else 'N/A' }}
+                                    </small>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">
+                                        <i class="fas fa-file-alt me-1"></i>{{ category.articles|length }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-sm btn-info" 
+                                                onclick="editCategory({{ category.id }})"
+                                                title="Edit Category">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <form method="post" action="/admin/categories/delete/{{ category.id }}" 
+                                              style="display: inline;"
+                                              onsubmit="return confirm('Delete this category? Articles will be uncategorized.')">
+                                            <button type="submit" class="btn btn-sm btn-danger" title="Delete">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-folder-open fa-4x" style="color: #6c757d;"></i>
+                    <h5 class="mt-3">No Categories</h5>
+                    <p class="text-muted">Create your first category to organize articles.</p>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
-EOF
+
+{% block scripts %}
+<script>
+function editCategory(id) {
+    // For now, just show an alert - you can implement edit functionality later
+    alert('Edit functionality coming soon! Category ID: ' + id);
+}
+</script>
+{% endblock %}
