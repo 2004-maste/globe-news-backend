@@ -1,6 +1,5 @@
 """
-Minimal Models for Globe News
-SQLAlchemy models with all necessary fields including admin approval
+Minimal Models for Globe News - MATCHING OLD DATABASE SCHEMA (2480 articles)
 """
 
 from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey
@@ -19,7 +18,6 @@ class Category(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
-    # Relationships
     articles: Mapped[List["Article"]] = relationship("Article", back_populates="category_rel")
     
     def __repr__(self):
@@ -31,81 +29,76 @@ class Article(Base):
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
-    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # RSS description/summary
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Alias for summary
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
-    # Content fields
-    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # RSS content/snippet
-    full_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Extracted full article
-    preview_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Enhanced preview/analysis
+    # Core content fields
+    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    full_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    preview_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Old DB has this
     
     # Article metadata
     url: Mapped[str] = mapped_column(String(1000), nullable=False, unique=True)
-    url_to_image: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)  # Main image field
+    url_to_image: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    thumbnail_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)  # Old DB has this
     published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     author: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     
-    # Foreign key - only category_id exists in database
+    # Foreign key
     category_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("categories.id"), nullable=True)
     
-    # Source is a TEXT field in the database, not a foreign key
+    # Source info
     source: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     
-    # Additional fields
-    country: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # Language & status
     language: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, default='en')
-    is_trending: Mapped[bool] = mapped_column(Boolean, default=False)
     is_breaking: Mapped[bool] = mapped_column(Boolean, default=False)
-    view_count: Mapped[int] = mapped_column(Integer, default=0)
     
-    # Content metrics
-    has_full_content: Mapped[bool] = mapped_column(Boolean, default=False)
-    content_length: Mapped[int] = mapped_column(Integer, default=0)
+    # Old DB specific fields
+    read_time: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Old DB has this
+    fetch_count: Mapped[int] = mapped_column(Integer, default=0)  # Old DB has this
+    last_fetched: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # Old DB has this
+    content_fetched: Mapped[bool] = mapped_column(Boolean, default=False)  # Old DB has this
+    fetch_attempts: Mapped[int] = mapped_column(Integer, default=0)  # Old DB has this
+    last_fetch_attempt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # Old DB has this
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # ========== ADMIN APPROVAL FIELDS (for AdSense compliance) ==========
-    # Approval status
-    is_approved: Mapped[bool] = mapped_column(Boolean, default=False)  # Whether article is approved for public
-    is_rejected: Mapped[bool] = mapped_column(Boolean, default=False)  # Whether article was rejected
-    is_edited: Mapped[bool] = mapped_column(Boolean, default=False)    # Whether article was manually edited
+    # ========== ADMIN APPROVAL FIELDS ==========
+    is_approved: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_rejected: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_edited: Mapped[bool] = mapped_column(Boolean, default=False)
     
-    # Approval timestamps and metadata
-    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)   # When approved
-    approved_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)     # Who approved
-    rejected_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)   # When rejected
-    rejected_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)     # Who rejected
-    edited_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)     # Last edit time
-    edited_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)       # Who last edited
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    approved_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    rejected_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    rejected_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    edited_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    edited_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     
-    # Editorial notes
-    editor_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)           # Internal notes for editors
+    editor_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
-    # Relationships - only category relationship remains
+    # Relationships
     category_rel: Mapped[Optional["Category"]] = relationship("Category", back_populates="articles")
     
     @property
     def image_url(self):
-        """Compatibility property - maps image_url to url_to_image"""
-        return self.url_to_image
+        return self.url_to_image or self.thumbnail_url
     
     @property
     def is_public(self):
-        """Check if article should be visible to public"""
         return self.is_approved and not self.is_rejected
     
     @property
     def category(self):
-        """For backward compatibility"""
         return self.category_rel
     
     def __repr__(self):
         return f"<Article {self.title[:50]}...>"
 
 
-# For backward compatibility and easier imports
+# For backward compatibility
 NewsArticle = Article
 
 __all__ = [
