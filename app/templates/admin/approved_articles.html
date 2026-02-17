@@ -1,58 +1,130 @@
-cat > /app/app/templates/admin/approved_articles.html << 'EOF'
-{% extends "admin/base_admin.html" %}
-{% block title %}Approved Articles - Globe News Admin{% endblock %}
+{% extends "base_admin.html" %}
+{% block title %}Approved Articles{% endblock %}
+{% block page_title %}Approved Articles ({{ total }}){% endblock %}
+
 {% block content %}
-<div class="container-fluid">
-    <h1 class="h3 mb-4">Approved Articles ({{ total }})</h1>
-    
-    <div class="card">
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Title</th>
-                            <th>Source</th>
-                            <th>Category</th>
-                            <th>Approved</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for article in articles %}
-                        <tr>
-                            <td>{{ article.id }}</td>
-                            <td>{{ article.title[:50] }}...</td>
-                            <td>{{ article.source }}</td>
-                            <td>{{ article.category_rel.name if article.category_rel else 'Uncategorized' }}</td>
-                            <td>{{ article.approved_at }}</td>
-                            <td>
-                                <a href="/admin/articles/{{ article.id }}/review" class="btn btn-sm btn-info">View</a>
-                                <form method="post" action="/admin/articles/{{ article.id }}/reject" style="display:inline;">
-                                    <button type="submit" class="btn btn-sm btn-warning">Unapprove</button>
+<div class="card">
+    <div class="card-header">
+        <h5><i class="fas fa-check-circle me-2"></i>Published Articles</h5>
+        <div>
+            <span class="badge bg-success me-2">{{ total }} Total</span>
+            <span class="badge bg-info">{{ articles|length }} on this page</span>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if articles %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Title</th>
+                        <th>Source</th>
+                        <th>Category</th>
+                        <th>Approved</th>
+                        <th>Approved By</th>
+                        <th>Views</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for article in articles %}
+                    <tr>
+                        <td><span class="badge badge-info">#{{ article.id }}</span></td>
+                        <td>
+                            <strong>{{ article.title[:60] }}{% if article.title|length > 60 %}...{% endif %}</strong>
+                        </td>
+                        <td>
+                            <span class="badge" style="background: #e9ecef; color: #495057;">
+                                <i class="fas fa-rss me-1"></i>{{ article.source or 'Unknown' }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge" style="background: #dbeafe; color: #1e40af;">
+                                {{ article.category_rel.name if article.category_rel else 'Uncategorized' }}
+                            </span>
+                        </td>
+                        <td>
+                            <small>
+                                <i class="far fa-calendar-alt me-1"></i>
+                                {{ article.approved_at[:10] if article.approved_at else 'N/A' }}
+                            </small>
+                        </td>
+                        <td>
+                            <span class="badge bg-info">
+                                <i class="fas fa-user me-1"></i>{{ article.approved_by or 'System' }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary">
+                                <i class="fas fa-eye me-1"></i>{{ article.view_count or 0 }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="/admin/articles/{{ article.id }}/review" 
+                                   class="btn btn-sm btn-info" 
+                                   title="View Details">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <form method="post" action="/admin/articles/{{ article.id }}/reject" 
+                                      style="display: inline;"
+                                      onsubmit="return confirm('Unapprove this article? It will be hidden from the public site.')">
+                                    <button type="submit" class="btn btn-sm btn-warning" title="Unapprove">
+                                        <i class="fas fa-undo"></i>
+                                    </button>
                                 </form>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            
-            <!-- Pagination -->
-            {% if total_pages > 1 %}
-            <nav>
-                <ul class="pagination">
-                    {% for p in range(1, total_pages + 1) %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if total_pages > 1 %}
+        <nav aria-label="Page navigation" class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if page > 1 %}
+                <li class="page-item">
+                    <a class="page-link" href="/admin/articles/approved?page={{ page-1 }}" aria-label="Previous">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for p in range(1, total_pages + 1) %}
+                    {% if p >= page-2 and p <= page+2 %}
                     <li class="page-item {% if p == page %}active{% endif %}">
                         <a class="page-link" href="/admin/articles/approved?page={{ p }}">{{ p }}</a>
                     </li>
-                    {% endfor %}
-                </ul>
-            </nav>
-            {% endif %}
+                    {% endif %}
+                {% endfor %}
+
+                {% if page < total_pages %}
+                <li class="page-item">
+                    <a class="page-link" href="/admin/articles/approved?page={{ page+1 }}" aria-label="Next">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center py-5">
+            <div class="mb-4">
+                <i class="fas fa-newspaper fa-5x" style="color: #6c757d;"></i>
+            </div>
+            <h4>No Approved Articles</h4>
+            <p class="text-muted">Articles you approve will appear here.</p>
+            <a href="/admin/articles/pending" class="btn btn-primary mt-3">
+                <i class="fas fa-clock me-2"></i>Review Pending Articles
+            </a>
         </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
-EOF
