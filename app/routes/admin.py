@@ -338,3 +338,49 @@ async def admin_settings(request: Request):
             "admin": admin
         }
     )
+
+@router.post("/articles/bulk-approve")
+async def bulk_approve_articles(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Approve all pending articles"""
+    admin = get_current_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin/login")
+    
+    count = db.query(Article).filter(Article.is_approved == False).update(
+        {
+            'is_approved': True,
+            'approved_at': datetime.utcnow(),
+            'approved_by': admin,
+            'edited_at': datetime.utcnow()
+        },
+        synchronize_session=False
+    )
+    db.commit()
+    
+    return RedirectResponse(url="/admin/articles/approved", status_code=303)
+
+@router.post("/articles/bulk-reject")
+async def bulk_reject_articles(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Reject all pending articles"""
+    admin = get_current_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin/login")
+    
+    count = db.query(Article).filter(Article.is_approved == False).update(
+        {
+            'is_rejected': True,
+            'rejected_at': datetime.utcnow(),
+            'rejected_by': admin,
+            'edited_at': datetime.utcnow()
+        },
+        synchronize_session=False
+    )
+    db.commit()
+    
+    return RedirectResponse(url="/admin/articles/pending", status_code=303)
