@@ -49,10 +49,10 @@
                         <td>
                             <small>
                                 <i class="far fa-calendar-alt me-1"></i>
-                                {{ article.published_at[:10] if article.published_at else 'N/A' }}
+                                {{ article.published_at.strftime('%Y-%m-%d') if article.published_at else 'N/A' }}
                                 <br>
                                 <i class="far fa-clock me-1"></i>
-                                {{ article.published_at[11:16] if article.published_at else '' }}
+                                {{ article.published_at.strftime('%H:%M') if article.published_at else '' }}
                             </small>
                         </td>
                         <td>
