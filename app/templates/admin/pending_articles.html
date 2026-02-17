@@ -1,0 +1,61 @@
+cat > /app/app/templates/admin/pending_articles.html << 'EOF'
+{% extends "admin/base_admin.html" %}
+{% block title %}Pending Articles - Globe News Admin{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4">Pending Articles ({{ total }})</h1>
+    
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Title</th>
+                            <th>Source</th>
+                            <th>Category</th>
+                            <th>Published</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for article in articles %}
+                        <tr>
+                            <td>{{ article.id }}</td>
+                            <td>{{ article.title[:50] }}...</td>
+                            <td>{{ article.source }}</td>
+                            <td>{{ article.category_rel.name if article.category_rel else 'Uncategorized' }}</td>
+                            <td>{{ article.published_at }}</td>
+                            <td>
+                                <a href="/admin/articles/{{ article.id }}/review" class="btn btn-sm btn-primary">Review</a>
+                                <form method="post" action="/admin/articles/{{ article.id }}/approve" style="display:inline;">
+                                    <button type="submit" class="btn btn-sm btn-success">Approve</button>
+                                </form>
+                                <form method="post" action="/admin/articles/{{ article.id }}/reject" style="display:inline;">
+                                    <button type="submit" class="btn btn-sm btn-danger">Reject</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            {% if total_pages > 1 %}
+            <nav>
+                <ul class="pagination">
+                    {% for p in range(1, total_pages + 1) %}
+                    <li class="page-item {% if p == page %}active{% endif %}">
+                        <a class="page-link" href="/admin/articles/pending?page={{ p }}">{{ p }}</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+EOF
