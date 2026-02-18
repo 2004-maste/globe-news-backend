@@ -88,6 +88,7 @@ def init_database():
             edited_at DATETIME,
             edited_by TEXT,
             editor_notes TEXT,
+            human_summary TEXT,  -- ADDED: Human-written summary field
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (category_id) REFERENCES categories (id)
         )
@@ -111,7 +112,8 @@ def init_database():
             ('rejected_by', 'TEXT'),
             ('edited_at', 'DATETIME'),
             ('edited_by', 'TEXT'),
-            ('editor_notes', 'TEXT')
+            ('editor_notes', 'TEXT'),
+            ('human_summary', 'TEXT')  # ADDED: Human summary column
         ]
         
         for column_name, column_type in expected_columns:
@@ -1422,8 +1424,16 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# ADMIN ROUTES - MOVED HERE (FIXED)
-app.include_router(admin.router)
+# ==================== FIXED: SESSION MIDDLEWARE (ADDED) ====================
+# THIS IS THE CRITICAL FIX FOR THE ADMIN HUMAN SUMMARY FEATURE
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.environ.get("SECRET_KEY", "globe-news-secret-key-change-this-in-production-2026"),
+    session_cookie="globe_news_admin_session",
+    max_age=86400,  # 24 hours in seconds
+    same_site="lax",
+    https_only=False,  # Set to True in production with HTTPS
+)
 
 # CORS middleware
 app.add_middleware(
@@ -1433,6 +1443,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ADMIN ROUTES - MUST BE AFTER SESSION MIDDLEWARE
+app.include_router(admin.router)
 
 # ==================== API ENDPOINTS ====================
 
@@ -1486,7 +1499,8 @@ async def root():
                 "Multi-language support (English & Kinyarwanda)",
                 "Automatic hourly updates",
                 "Article-specific context analysis",
-                "Admin approval workflow for AdSense compliance"
+                "Admin approval workflow for AdSense compliance",
+                "Human summary editing for articles"  # Added this feature
             ],
             "content_extraction": {
                 "library": "readability-lxml (if available)",
@@ -1587,6 +1601,7 @@ async def get_articles(
             article_dict.setdefault('author', 'Unknown')
             article_dict.setdefault('preview_content', None)
             article_dict.setdefault('full_content', None)
+            article_dict.setdefault('human_summary', None)  # ADDED
             
             # Add content length info
             if article_dict.get('full_content'):
@@ -1639,6 +1654,7 @@ async def get_article(article_id: int):
         article_dict.setdefault('author', 'Unknown')
         article_dict.setdefault('preview_content', None)
         article_dict.setdefault('full_content', None)
+        article_dict.setdefault('human_summary', None)  # ADDED
         
         # Add content info
         if article_dict.get('full_content'):
@@ -1669,6 +1685,7 @@ async def get_article(article_id: int):
             rel_dict = dict(rel)
             rel_dict.setdefault('category_name', 'General')
             rel_dict.setdefault('language', 'en')
+            rel_dict.setdefault('human_summary', None)  # ADDED
             related_list.append(rel_dict)
         
         article_dict['related_articles'] = related_list
@@ -1709,6 +1726,7 @@ async def get_breaking_articles(limit: int = Query(20, ge=1, le=100)):
             article_dict.setdefault('category_name', 'General')
             article_dict.setdefault('language', 'en')
             article_dict['is_breaking'] = True
+            article_dict.setdefault('human_summary', None)  # ADDED
             
             if article_dict.get('full_content'):
                 article_dict['has_full_content'] = True
@@ -1762,6 +1780,9 @@ async def get_fetcher_stats():
         cursor.execute('SELECT COUNT(*) FROM articles WHERE is_approved = 0')
         pending_approval = cursor.fetchone()[0]
         
+        cursor.execute('SELECT COUNT(*) FROM articles WHERE human_summary IS NOT NULL')  # ADDED
+        with_human_summary = cursor.fetchone()[0]  # ADDED
+        
         cursor.execute('SELECT MAX(published_at) FROM articles')
         latest_date_result = cursor.fetchone()[0]
         latest_date = latest_date_result if latest_date_result else datetime.now().isoformat()
@@ -1775,6 +1796,7 @@ async def get_fetcher_stats():
             "full_content_extracted": full_content_count,
             "extraction_rate": f"{(full_content_count/total*100):.1f}%" if total > 0 else "0%",
             "pending_approval": pending_approval,
+            "with_human_summary": with_human_summary,  # ADDED
             "latest_article_date": latest_date,
             "configured_feeds": len(RSS_FEEDS),
             "content_extraction_enabled": Document is not None,
@@ -1790,6 +1812,7 @@ async def get_fetcher_stats():
             "full_content_extracted": 0,
             "extraction_rate": "0%",
             "pending_approval": 0,
+            "with_human_summary": 0,  # ADDED
             "latest_article_date": None,
             "configured_feeds": len(RSS_FEEDS),
             "content_extraction_enabled": Document is not None
@@ -1839,7 +1862,19 @@ async def get_article_preview(article_id: int):
         
         article_dict = dict(article)
         
-        # Check if preview already exists
+        # Check if human summary exists (priority over AI preview)
+        if article_dict.get('human_summary'):
+            conn.close()
+            return {
+                "article_id": article_id,
+                "preview": article_dict['human_summary'],
+                "has_preview": True,
+                "generated": False,
+                "has_full_content": bool(article_dict.get('full_content')),
+                "preview_type": "human"  # ADDED
+            }
+        
+        # Check if AI preview already exists
         if article_dict.get('preview_content'):
             conn.close()
             return {
@@ -1847,7 +1882,8 @@ async def get_article_preview(article_id: int):
                 "preview": article_dict['preview_content'],
                 "has_preview": True,
                 "generated": False,
-                "has_full_content": bool(article_dict.get('full_content'))
+                "has_full_content": bool(article_dict.get('full_content')),
+                "preview_type": "ai"  # ADDED
             }
         
         # Generate smart preview WITH FULL CONTENT
@@ -1875,7 +1911,8 @@ async def get_article_preview(article_id: int):
             "preview": preview,
             "has_preview": True,
             "generated": True,
-            "has_full_content": bool(article_dict.get('full_content'))
+            "has_full_content": bool(article_dict.get('full_content')),
+            "preview_type": "ai"  # ADDED
         }
         
     except HTTPException:
