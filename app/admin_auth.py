@@ -54,3 +54,28 @@ def get_current_admin(request: Request):
     if not token or not verify_session_token(token):
         return None
     return active_tokens[token].get("username")
+
+def verify_admin_credentials(username: str, password: str) -> bool:
+    """Verify admin credentials (for password change)"""
+    from app.admin_auth import ADMIN_USERNAME, ADMIN_PASSWORD
+    import secrets
+    
+    return (secrets.compare_digest(username, ADMIN_USERNAME) and 
+            secrets.compare_digest(password, ADMIN_PASSWORD))
+
+def update_admin_password(username: str, new_password: str):
+    """Update admin password (you'll need to store this securely)"""
+    # This is a placeholder - you should store passwords securely
+    # Options:
+    # 1. Update environment variable (not persistent)
+    # 2. Store in database (recommended)
+    # 3. Store in encrypted file
+    
+    # For now, just print that it would be updated
+    print(f"Password would be updated for {username}")
+    
+    # In production, you'd want to:
+    # 1. Hash the password
+    # 2. Store in database with user ID
+    # 3. Update session
+    pass
