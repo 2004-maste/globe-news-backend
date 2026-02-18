@@ -18,7 +18,8 @@ class Category(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
-    articles: Mapped[List["Article"]] = relationship("Article", back_populates="category_rel")
+    # Fixed relationship to match the back_populates in Article
+    articles: Mapped[List["Article"]] = relationship("Article", back_populates="category")
     
     def __repr__(self):
         return f"<Category {self.name}>"
@@ -35,12 +36,16 @@ class Article(Base):
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     full_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     preview_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Old DB has this
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # RSS summary
+    
+    # ===== NEW FIELD FOR HUMAN SUMMARIES =====
+    human_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Editor-written summary
+    # ==========================================
     
     # Article metadata
     url: Mapped[str] = mapped_column(String(1000), nullable=False, unique=True)
     url_to_image: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
-    thumbnail_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)  # Old DB has this
+    thumbnail_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     author: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     
@@ -54,13 +59,13 @@ class Article(Base):
     language: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, default='en')
     is_breaking: Mapped[bool] = mapped_column(Boolean, default=False)
     
-    # Old DB specific fields
-    read_time: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Old DB has this
-    fetch_count: Mapped[int] = mapped_column(Integer, default=0)  # Old DB has this
-    last_fetched: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # Old DB has this
-    content_fetched: Mapped[bool] = mapped_column(Boolean, default=False)  # Old DB has this
-    fetch_attempts: Mapped[int] = mapped_column(Integer, default=0)  # Old DB has this
-    last_fetch_attempt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # Old DB has this
+    # Performance tracking fields
+    read_time: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    fetch_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_fetched: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    content_fetched: Mapped[bool] = mapped_column(Boolean, default=False)
+    fetch_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_fetch_attempt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -79,8 +84,8 @@ class Article(Base):
     
     editor_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
-    # Relationships
-    category_rel: Mapped[Optional["Category"]] = relationship("Category", back_populates="articles")
+    # Relationships - Fixed to match Category's back_populates
+    category: Mapped[Optional["Category"]] = relationship("Category", back_populates="articles")
     
     @property
     def image_url(self):
@@ -91,8 +96,18 @@ class Article(Base):
         return self.is_approved and not self.is_rejected
     
     @property
-    def category(self):
-        return self.category_rel
+    def category_name(self):
+        return self.category.name if self.category else None
+    
+    @property
+    def display_summary(self):
+        """Returns human summary if available, otherwise falls back to preview_content or summary"""
+        if self.human_summary:
+            return self.human_summary
+        elif self.preview_content:
+            return self.preview_content
+        else:
+            return self.summary
     
     def __repr__(self):
         return f"<Article {self.title[:50]}...>"
