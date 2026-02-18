@@ -1,0 +1,158 @@
+{% extends "base_admin.html" %}
+{% block title %}Settings{% endblock %}
+{% block page_title %}System Settings{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-cog me-2"></i>General Settings</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="/admin/settings/update">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="site_name" class="form-label">
+                                    <i class="fas fa-globe me-1"></i>Site Name
+                                </label>
+                                <input type="text" class="form-control" id="site_name" name="site_name" 
+                                       value="{{ settings.site_name or 'Globe News' }}">
+                            </div>
+                            
+                            <div class="form-group mb-3">
+                                <label for="site_url" class="form-label">
+                                    <i class="fas fa-link me-1"></i>Site URL
+                                </label>
+                                <input type="url" class="form-control" id="site_url" name="site_url" 
+                                       value="{{ settings.site_url or 'https://globe-news-jade.vercel.app' }}">
+                            </div>
+                            
+                            <div class="form-group mb-3">
+                                <label for="admin_email" class="form-label">
+                                    <i class="fas fa-envelope me-1"></i>Admin Email
+                                </label>
+                                <input type="email" class="form-control" id="admin_email" name="admin_email" 
+                                       value="{{ settings.admin_email or 'admin@globenews.com' }}">
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="articles_per_page" class="form-label">
+                                    <i class="fas fa-newspaper me-1"></i>Articles Per Page
+                                </label>
+                                <input type="number" class="form-control" id="articles_per_page" name="articles_per_page" 
+                                       value="{{ settings.articles_per_page or 20 }}" min="5" max="100">
+                            </div>
+                            
+                            <div class="form-group mb-3">
+                                <label for="cache_ttl" class="form-label">
+                                    <i class="fas fa-clock me-1"></i>Cache Duration (seconds)
+                                </label>
+                                <input type="number" class="form-control" id="cache_ttl" name="cache_ttl" 
+                                       value="{{ settings.cache_ttl or 300 }}" min="0">
+                            </div>
+                            
+                            <div class="form-group mb-3">
+                                <label class="form-label d-block">
+                                    <i class="fas fa-toggle-on me-1"></i>Features
+                                </label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="enable_rss_fetch" name="enable_rss_fetch" 
+                                           {% if settings.enable_rss_fetch %}checked{% endif %}>
+                                    <label class="form-check-label" for="enable_rss_fetch">
+                                        Enable automatic RSS fetching
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="enable_content_extraction" name="enable_content_extraction" 
+                                           {% if settings.enable_content_extraction %}checked{% endif %}>
+                                    <label class="form-check-label" for="enable_content_extraction">
+                                        Enable full content extraction
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="enable_preview_generation" name="enable_preview_generation" 
+                                           {% if settings.enable_preview_generation %}checked{% endif %}>
+                                    <label class="form-check-label" for="enable_preview_generation">
+                                        Enable AI preview generation
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <h5 class="mb-3"><i class="fas fa-shield-alt me-2"></i>Admin Security</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="current_password" class="form-label">Current Password</label>
+                                <input type="password" class="form-control" id="current_password" name="current_password">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="new_password" class="form-label">New Password</label>
+                                <input type="password" class="form-control" id="new_password" name="new_password">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="confirm_password" class="form-label">Confirm New Password</label>
+                                <input type="password" class="form-control" id="confirm_password" name="confirm_password">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Leave password fields empty to keep current password.
+                    </div>
+                    
+                    <div class="text-end mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>Save Settings
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System Information -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-server me-2"></i>System Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="stat-label">Python Version</div>
+                        <div class="stat-number small">{{ system_info.python_version }}</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-label">Database Size</div>
+                        <div class="stat-number small">{{ system_info.db_size }}</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-label">Total Articles</div>
+                        <div class="stat-number small">{{ system_info.total_articles }}</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-label">Last Fetch</div>
+                        <div class="stat-number small">{{ system_info.last_fetch }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
