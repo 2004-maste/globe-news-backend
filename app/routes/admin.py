@@ -384,3 +384,158 @@ async def bulk_reject_articles(
     db.commit()
     
     return RedirectResponse(url="/admin/articles/pending", status_code=303)
+
+# ==================== SETTINGS MANAGEMENT ====================
+
+@router.get("/settings", response_class=HTMLResponse)
+async def admin_settings(request: Request, db: Session = Depends(get_db)):
+    """Admin settings page"""
+    admin = get_current_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin/login")
+    
+    # Get system info
+    import sys
+    import os
+    from datetime import datetime
+    
+    # Database size
+    db_path = '/app/data/globe_news.db'
+    db_size = "0 MB"
+    if os.path.exists(db_path):
+        size_bytes = os.path.getsize(db_path)
+        db_size = f"{size_bytes / (1024*1024):.1f} MB"
+    
+    # Last fetch time (you can store this in a settings table later)
+    last_fetch = "Never"
+    
+    system_info = {
+        'python_version': sys.version.split()[0],
+        'db_size': db_size,
+        'total_articles': db.query(Article).count(),
+        'last_fetch': last_fetch
+    }
+    
+    # Default settings (you can store these in a settings table later)
+    settings = {
+        'site_name': 'Globe News',
+        'site_url': 'https://globe-news-jade.vercel.app',
+        'admin_email': 'admin@globenews.com',
+        'articles_per_page': 20,
+        'cache_ttl': 300,
+        'enable_rss_fetch': True,
+        'enable_content_extraction': True,
+        'enable_preview_generation': True
+    }
+    
+    return templates.TemplateResponse(
+        "settings.html",
+        {
+            "request": request,
+            "admin": admin,
+            "settings": settings,
+            "system_info": system_info
+        }
+    )
+
+@router.post("/settings/update")
+async def update_settings(
+    request: Request,
+    response: Response,
+    site_name: str = Form(...),
+    site_url: str = Form(...),
+    admin_email: str = Form(...),
+    articles_per_page: int = Form(20),
+    cache_ttl: int = Form(300),
+    enable_rss_fetch: bool = Form(False),
+    enable_content_extraction: bool = Form(False),
+    enable_preview_generation: bool = Form(False),
+    current_password: str = Form(""),
+    new_password: str = Form(""),
+    confirm_password: str = Form(""),
+    db: Session = Depends(get_db)
+):
+    """Update settings"""
+    admin_user = get_current_admin(request)
+    if not admin_user:
+        return RedirectResponse(url="/admin/login")
+    
+    # Handle password change if requested
+    if current_password and new_password and confirm_password:
+        from app.admin_auth import ADMIN_PASSWORD, verify_admin_credentials
+        
+        # Verify current password
+        if not verify_admin_credentials(admin_user, current_password):
+            return templates.TemplateResponse(
+                "settings.html",
+                {
+                    "request": request,
+                    "admin": admin_user,
+                    "error": "Current password is incorrect",
+                    "settings": {
+                        'site_name': site_name,
+                        'site_url': site_url,
+                        'admin_email': admin_email,
+                        'articles_per_page': articles_per_page,
+                        'cache_ttl': cache_ttl,
+                        'enable_rss_fetch': enable_rss_fetch,
+                        'enable_content_extraction': enable_content_extraction,
+                        'enable_preview_generation': enable_preview_generation
+                    }
+                }
+            )
+        
+        if new_password != confirm_password:
+            return templates.TemplateResponse(
+                "settings.html",
+                {
+                    "request": request,
+                    "admin": admin_user,
+                    "error": "New passwords do not match",
+                    "settings": {
+                        'site_name': site_name,
+                        'site_url': site_url,
+                        'admin_email': admin_email,
+                        'articles_per_page': articles_per_page,
+                        'cache_ttl': cache_ttl,
+                        'enable_rss_fetch': enable_rss_fetch,
+                        'enable_content_extraction': enable_content_extraction,
+                        'enable_preview_generation': enable_preview_generation
+                    }
+                }
+            )
+        
+        if len(new_password) < 8:
+            return templates.TemplateResponse(
+                "settings.html",
+                {
+                    "request": request,
+                    "admin": admin_user,
+                    "error": "Password must be at least 8 characters",
+                    "settings": {
+                        'site_name': site_name,
+                        'site_url': site_url,
+                        'admin_email': admin_email,
+                        'articles_per_page': articles_per_page,
+                        'cache_ttl': cache_ttl,
+                        'enable_rss_fetch': enable_rss_fetch,
+                        'enable_content_extraction': enable_content_extraction,
+                        'enable_preview_generation': enable_preview_generation
+                    }
+                }
+            )
+        
+        # Update password (you'll need to implement this in admin_auth.py)
+        # update_admin_password(admin_user, new_password)
+        
+        print(f"Password change requested for {admin_user}")
+    
+    # Here you would save settings to database or file
+    print(f"Settings updated by {admin_user}:")
+    print(f"  Site Name: {site_name}")
+    print(f"  Site URL: {site_url}")
+    print(f"  Articles per page: {articles_per_page}")
+    
+    # Redirect back to settings with success message
+    response = RedirectResponse(url="/admin/settings?success=true", status_code=303)
+    return response
