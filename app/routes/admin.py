@@ -394,52 +394,34 @@ async def admin_settings(request: Request, db: Session = Depends(get_db)):
     if not admin:
         return RedirectResponse(url="/admin/login")
     
-    # Get system info
-    import sys
-    import os
-    from datetime import datetime
+    print(f"DEBUG: admin_settings called by {admin}")
     
-    # Database size
-    db_path = '/app/data/globe_news.db'
-    db_size = "0 MB"
-    if os.path.exists(db_path):
-        size_bytes = os.path.getsize(db_path)
-        db_size = f"{size_bytes / (1024*1024):.1f} MB"
-    
-    # Last fetch time - get from database or use default
-    last_fetch = "Never"
-    latest_article = db.query(Article).order_by(Article.created_at.desc()).first()
-    if latest_article and latest_article.created_at:
-        last_fetch = latest_article.created_at.strftime('%Y-%m-%d %H:%M')
-    
-    system_info = {
-        'python_version': sys.version.split()[0],
-        'db_size': db_size,
-        'total_articles': db.query(Article).count(),
-        'last_fetch': last_fetch
-    }
-    
-    # Default settings (you can store these in a settings table later)
+    # Simple settings dict for testing
     settings = {
         'site_name': 'Globe News',
         'site_url': 'https://globe-news-jade.vercel.app',
-        'admin_email': 'admin@globenews.com',
-        'articles_per_page': 20,
-        'cache_ttl': 300,
-        'enable_rss_fetch': True,
-        'enable_content_extraction': True,
-        'enable_preview_generation': True
     }
     
-    return templates.TemplateResponse(
-        "settings.html",
-        {
-            "request": request,
-            "admin": admin,
-            "settings": settings,  # This line is crucial!
-            "system_info": system_info
-        }
-    )
+    print(f"DEBUG: settings dict: {settings}")
+    print(f"DEBUG: settings.site_name: {settings.get('site_name')}")
+    
+    # Simple system info
+    system_info = {
+        'python_version': '3.11',
+        'db_size': '10 MB',
+        'total_articles': 2480,
+        'last_fetch': '2024-02-18'
+    }
+    
+    template_data = {
+        "request": request,
+        "admin": admin,
+        "settings": settings,
+        "system_info": system_info
+    }
+    print(f"DEBUG: template_data keys: {template_data.keys()}")
+    
+    return templates.TemplateResponse("settings.html", template_data)
 
 @router.post("/settings/update")
 async def update_settings(
