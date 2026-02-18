@@ -1,0 +1,170 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}Review Article - {{ article.title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Heading -->
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Review Article</h1>
+        <a href="{{ url_for('admin_pending_articles') }}" class="btn btn-sm btn-secondary shadow-sm">
+            <i class="fas fa-arrow-left fa-sm text-white-50 mr-1"></i> Back to Pending
+        </a>
+    </div>
+
+    <div class="row">
+        <!-- Main Article Content -->
+        <div class="col-lg-8">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Article Details</h6>
+                    <span class="badge bg-info text-white">{{ article.category.name if article.category else 'Uncategorized' }}</span>
+                </div>
+                <div class="card-body">
+                    <h4 class="mb-3">{{ article.title }}</h4>
+                    
+                    {% if article.url_to_image %}
+                    <img src="{{ article.url_to_image }}" class="img-fluid mb-3" alt="{{ article.title }}" style="max-height: 400px; width: auto;">
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <strong>Source:</strong> {{ article.source }}<br>
+                        <strong>Published:</strong> {{ article.published_at.strftime('%B %d, %Y at %H:%M') if article.published_at else 'Unknown' }}<br>
+                        <strong>Original URL:</strong> <a href="{{ article.url }}" target="_blank">{{ article.url[:60] }}...</a>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>RSS Summary:</strong>
+                        <p class="border-left pl-3 py-2 bg-light">{{ article.summary or 'No summary available' }}</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Full Content:</strong>
+                        <div class="border p-3 bg-light" style="max-height: 400px; overflow-y: auto;">
+                            {{ article.full_content or article.content or 'No content extracted yet' | safe }}
+                        </div>
+                    </div>
+                    
+                    <!-- AI Preview Section -->
+                    {% if article.preview_content %}
+                    <div class="mb-3">
+                        <strong>AI-Generated Preview:</strong>
+                        <p class="border-left pl-3 py-2 bg-info text-white">{{ article.preview_content }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Column - Review Actions & Human Summary -->
+        <div class="col-lg-4">
+            <!-- HUMAN SUMMARY CARD - NEW SECTION -->
+            <div class="card shadow mb-4 border-left-warning">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-warning">✏️ Human Summary</h6>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">
+                        Write a custom summary for this article. This will be displayed on the frontend 
+                        instead of the AI-generated preview. Keep it concise and engaging (2-3 sentences).
+                    </p>
+                    
+                    <form method="POST" action="{{ url_for('admin_save_human_summary', article_id=article.id) }}">
+                        <div class="form-group">
+                            <textarea 
+                                class="form-control" 
+                                name="human_summary" 
+                                rows="6" 
+                                placeholder="Enter a human-written summary for this article..."
+                                style="resize: vertical;"
+                            >{{ article.human_summary or '' }}</textarea>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between mb-3">
+                            <button type="submit" name="action" value="save_only" class="btn btn-warning">
+                                <i class="fas fa-save mr-1"></i> Save Summary Only
+                            </button>
+                            
+                            {% if not article.is_approved %}
+                            <button type="submit" name="action" value="save_and_approve" class="btn btn-success">
+                                <i class="fas fa-check-circle mr-1"></i> Save & Approve
+                            </button>
+                            {% endif %}
+                        </div>
+                    </form>
+                    
+                    {% if article.human_summary %}
+                    <div class="alert alert-success mt-2">
+                        <strong>✓ Current Human Summary:</strong>
+                        <p class="mb-0 mt-1">{{ article.human_summary }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Quick Stats Card -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Article Stats</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <strong>ID:</strong> {{ article.id }}<br>
+                        <strong>Status:</strong> 
+                        {% if article.is_approved %}
+                            <span class="badge bg-success text-white">Approved</span>
+                        {% elif article.is_rejected %}
+                            <span class="badge bg-danger text-white">Rejected</span>
+                        {% else %}
+                            <span class="badge bg-warning text-white">Pending</span>
+                        {% endif %}<br>
+                        <strong>Content Fetched:</strong> 
+                        {% if article.content_fetched %}
+                            <span class="badge bg-success text-white">Yes</span>
+                        {% else %}
+                            <span class="badge bg-secondary text-white">No</span>
+                        {% endif %}<br>
+                        <strong>Fetch Attempts:</strong> {{ article.fetch_attempts }}<br>
+                        <strong>Has AI Preview:</strong> 
+                        {% if article.preview_content %}
+                            <span class="badge bg-info text-white">Yes</span>
+                        {% else %}
+                            <span class="badge bg-secondary text-white">No</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Danger Zone - Approve/Reject -->
+            <div class="card shadow mb-4 border-left-danger">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-danger">⚠️ Approval Actions</h6>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin_approve_article', article_id=article.id) }}" class="d-inline">
+                        <button type="submit" class="btn btn-success btn-block mb-2" {% if article.is_approved %}disabled{% endif %}>
+                            <i class="fas fa-check-circle mr-1"></i> Approve Article
+                        </button>
+                    </form>
+                    
+                    <form method="POST" action="{{ url_for('admin_reject_article', article_id=article.id) }}" class="d-inline">
+                        <button type="submit" class="btn btn-danger btn-block" onclick="return confirm('Are you sure you want to reject this article?')" {% if article.is_rejected %}disabled{% endif %}>
+                            <i class="fas fa-times-circle mr-1"></i> Reject Article
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-resize textarea as user types
+document.querySelector('textarea[name="human_summary"]').addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = (this.scrollHeight) + 'px';
+});
+</script>
+{% endblock %}
