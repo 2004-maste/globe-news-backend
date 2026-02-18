@@ -7,7 +7,7 @@
     <!-- Page Heading -->
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800">Review Article</h1>
-        <a href="{{ url_for('admin_pending_articles') }}" class="btn btn-sm btn-secondary shadow-sm">
+        <a href="{{ url_for('pending_articles') }}" class="btn btn-sm btn-secondary shadow-sm">
             <i class="fas fa-arrow-left fa-sm text-white-50 mr-1"></i> Back to Pending
         </a>
     </div>
@@ -141,13 +141,13 @@
                     <h6 class="m-0 font-weight-bold text-danger">⚠️ Approval Actions</h6>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="{{ url_for('admin_approve_article', article_id=article.id) }}" class="d-inline">
+                    <form method="POST" action="{{ url_for('approve_article', article_id=article.id) }}" class="d-inline">
                         <button type="submit" class="btn btn-success btn-block mb-2" {% if article.is_approved %}disabled{% endif %}>
                             <i class="fas fa-check-circle mr-1"></i> Approve Article
                         </button>
                     </form>
                     
-                    <form method="POST" action="{{ url_for('admin_reject_article', article_id=article.id) }}" class="d-inline">
+                    <form method="POST" action="{{ url_for('reject_article', article_id=article.id) }}" class="d-inline">
                         <button type="submit" class="btn btn-danger btn-block" onclick="return confirm('Are you sure you want to reject this article?')" {% if article.is_rejected %}disabled{% endif %}>
                             <i class="fas fa-times-circle mr-1"></i> Reject Article
                         </button>
@@ -162,9 +162,14 @@
 {% block scripts %}
 <script>
 // Auto-resize textarea as user types
-document.querySelector('textarea[name="human_summary"]').addEventListener('input', function() {
-    this.style.height = 'auto';
-    this.style.height = (this.scrollHeight) + 'px';
+document.addEventListener('DOMContentLoaded', function() {
+    const textarea = document.querySelector('textarea[name="human_summary"]');
+    if (textarea) {
+        textarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+    }
 });
 </script>
 {% endblock %}
