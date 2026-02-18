@@ -406,8 +406,11 @@ async def admin_settings(request: Request, db: Session = Depends(get_db)):
         size_bytes = os.path.getsize(db_path)
         db_size = f"{size_bytes / (1024*1024):.1f} MB"
     
-    # Last fetch time (you can store this in a settings table later)
+    # Last fetch time - get from database or use default
     last_fetch = "Never"
+    latest_article = db.query(Article).order_by(Article.created_at.desc()).first()
+    if latest_article and latest_article.created_at:
+        last_fetch = latest_article.created_at.strftime('%Y-%m-%d %H:%M')
     
     system_info = {
         'python_version': sys.version.split()[0],
@@ -433,7 +436,7 @@ async def admin_settings(request: Request, db: Session = Depends(get_db)):
         {
             "request": request,
             "admin": admin,
-            "settings": settings,
+            "settings": settings,  # This line is crucial!
             "system_info": system_info
         }
     )
