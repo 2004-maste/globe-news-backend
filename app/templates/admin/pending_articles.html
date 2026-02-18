@@ -23,6 +23,7 @@
                         <th>Category</th>
                         <th>Published</th>
                         <th>Content</th>
+                        <th>Summary</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -67,12 +68,28 @@
                             {% endif %}
                         </td>
                         <td>
+                            <!-- Human Summary Status Indicator -->
+                            {% if article.human_summary %}
+                            <span class="badge bg-success" title="Has human summary">
+                                <i class="fas fa-pen-fancy me-1"></i>Human
+                            </span>
+                            {% elif article.preview_content %}
+                            <span class="badge bg-info" title="Has AI preview">
+                                <i class="fas fa-robot me-1"></i>AI
+                            </span>
+                            {% else %}
+                            <span class="badge bg-secondary" title="No summary">
+                                <i class="fas fa-minus me-1"></i>None
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>
                             <div class="btn-group" role="group">
                                 <a href="/admin/articles/{{ article.id }}/review" 
                                    class="btn btn-sm btn-info" 
-                                   title="Review Article"
+                                   title="Review Article - Add Human Summary"
                                    data-bs-toggle="tooltip">
-                                    <i class="fas fa-eye"></i>
+                                    <i class="fas fa-eye me-1"></i>Review
                                 </a>
                                 <form method="post" action="/admin/articles/{{ article.id }}/approve" 
                                       style="display: inline;" 
