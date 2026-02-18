@@ -579,3 +579,42 @@ async def update_settings(
     # Redirect back to settings with success message
     response = RedirectResponse(url="/admin/settings?success=true", status_code=303)
     return response
+
+@router.post("/admin/articles/{article_id}/save-summary")
+async def admin_save_human_summary(
+    request: Request,
+    article_id: int,
+    human_summary: str = Form(None),
+    action: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    # Verify admin authentication
+    if not request.session.get("admin_logged_in"):
+        return RedirectResponse(url="/admin/login", status_code=303)
+    
+    # Get the article
+    article = db.query(Article).filter(Article.id == article_id).first()
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+    
+    # Save the human summary
+    article.human_summary = human_summary
+    
+    # If action is save_and_approve, also approve the article
+    if action == "save_and_approve":
+        article.is_approved = True
+        article.is_rejected = False
+        article.approved_at = datetime.utcnow()
+        article.approved_by = request.session.get("admin_username", "admin")
+    
+    # Commit changes
+    db.commit()
+    
+    # Clear cache for this article
+    await clear_article_cache(article_id)
+    
+    # Redirect based on action
+    if action == "save_and_approve":
+        return RedirectResponse(url="/admin/articles/approved", status_code=303)
+    else:
+        return RedirectResponse(url=f"/admin/articles/{article_id}/review", status_code=303)
