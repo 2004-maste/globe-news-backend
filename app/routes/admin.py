@@ -423,6 +423,61 @@ async def admin_settings(request: Request, db: Session = Depends(get_db)):
     
     return templates.TemplateResponse("settings.html", template_data)
 
+@router.get("/settings", response_class=HTMLResponse)
+async def admin_settings(request: Request, db: Session = Depends(get_db)):
+    """Admin settings page"""
+    admin = get_current_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin/login")
+    
+    print("="*50)
+    print("ADMIN SETTINGS DEBUG")
+    print(f"Admin user: {admin}")
+    
+    # Settings dict
+    settings = {
+        'site_name': 'Globe News',
+        'site_url': 'https://globe-news-jade.vercel.app',
+        'admin_email': 'admin@globenews.com',
+        'articles_per_page': 20,
+        'cache_ttl': 300,
+        'enable_rss_fetch': True,
+        'enable_content_extraction': True,
+        'enable_preview_generation': True
+    }
+    
+    # System info
+    import sys
+    import os
+    db_path = '/app/data/globe_news.db'
+    db_size = "0 MB"
+    if os.path.exists(db_path):
+        size_bytes = os.path.getsize(db_path)
+        db_size = f"{size_bytes / (1024*1024):.1f} MB"
+    
+    system_info = {
+        'python_version': sys.version.split()[0],
+        'db_size': db_size,
+        'total_articles': db.query(Article).count(),
+        'last_fetch': '2024-02-18'
+    }
+    
+    # Create template context
+    context = {
+        "request": request,
+        "admin": admin,
+        "settings": settings,
+        "system_info": system_info
+    }
+    
+    # Print debug info
+    print(f"Context keys: {list(context.keys())}")
+    print(f"Settings keys: {list(settings.keys())}")
+    print(f"System info keys: {list(system_info.keys())}")
+    print("="*50)
+    
+    return templates.TemplateResponse("settings.html", context)
+
 @router.post("/settings/update")
 async def update_settings(
     request: Request,
