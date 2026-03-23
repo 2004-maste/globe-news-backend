@@ -93,8 +93,53 @@ def init_database():
             FOREIGN KEY (category_id) REFERENCES categories (id)
         )
         ''')
+
+        # Create movies table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS movies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tmdb_id INTEGER UNIQUE NOT NULL,
+            type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            original_title TEXT,
+            overview TEXT,
+            tagline TEXT,
+            poster_url TEXT,
+            backdrop_url TEXT,
+            release_date TEXT,
+            last_air_date TEXT,
+            runtime INTEGER,
+            number_of_seasons INTEGER,
+            number_of_episodes INTEGER,
+            rating REAL DEFAULT 0,
+            vote_count INTEGER DEFAULT 0,
+            popularity REAL DEFAULT 0,
+            language TEXT DEFAULT 'en',
+            genres TEXT,
+            cast TEXT,
+            director TEXT,
+            creator TEXT,
+            networks TEXT,
+            production_companies TEXT,
+            streaming_info TEXT,
+            preview_content TEXT,
+            human_summary TEXT,
+            is_approved BOOLEAN DEFAULT 1,
+            is_trending BOOLEAN DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_fetched TIMESTAMP,
+            similar_movies TEXT
+        )
+        ''')
+
+        # Creating indexes for movies
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_movies_tmdb_id ON movies(tmdb_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_movies_type ON movies(type)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_movies_is_trending ON movies(is_trending)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_movies_rating ON movies(rating)')
         
-        # Check and add missing columns
+        # Checking and adding missing columns
         cursor.execute("PRAGMA table_info(articles)")
         existing_columns = [column[1] for column in cursor.fetchall()]
         
