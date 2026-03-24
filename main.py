@@ -1452,12 +1452,14 @@ async def lifespan(app: FastAPI):
     
     # Start background tasks
     task = asyncio.create_task(background_fetcher())
+    movie_task = asyncio.create_task(background_movie_fetcher())
     
     yield
     
     # Shutdown
     logger.info("Shutting down Globe News API...")
     task.cancel()
+    movie_task.cancel() 
 
 # Create FastAPI app
 app = FastAPI(
@@ -2051,6 +2053,109 @@ async def debug_extract_test(url: str = Query(..., description="URL to test cont
             "error": str(e),
             "success": False
         }
+
+# ==================== MOVIE ENDPOINTS ====================
+
+@app.get("/api/v1/movies/trending")
+async def get_trending_movies(limit: int = Query(20, ge=1, le=100), media_type: str = Query('all', regex='^(all|movie|tv)$')):
+    """Get trending movies and TV shows from database."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        if media_type == 'all':
+            cursor.execute('''
+                SELECT * FROM movies 
+                WHERE is_approved = 1 
+                ORDER BY popularity DESC 
+                LIMIT ?
+            ''', (limit,))
+        else:
+            cursor.execute('''
+                SELECT * FROM movies 
+                WHERE type = ? AND is_approved = 1 
+                ORDER BY popularity DESC 
+                LIMIT ?
+            ''', (media_type, limit))
+        
+        movies = cursor.fetchall()
+        conn.close()
+        
+        result = []
+        for movie in movies:
+            movie_dict = dict(movie)
+            # Parse JSON fields
+            if movie_dict.get('genres'):
+                import json
+                movie_dict['genres'] = json.loads(movie_dict['genres']) if isinstance(movie_dict['genres'], str) else movie_dict['genres']
+            if movie_dict.get('streaming_info'):
+                movie_dict['streaming_info'] = json.loads(movie_dict['streaming_info']) if isinstance(movie_dict['streaming_info'], str) else movie_dict['streaming_info']
+            
+            result.append(movie_dict)
+        
+        return {
+            "movies": result,
+            "count": len(result),
+            "type": media_type
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching trending movies: {e}")
+        return {"movies": [], "count": 0}
+
+
+@app.get("/api/v1/movies/{movie_id}")
+async def get_movie_details(movie_id: int):
+    """Get detailed movie/TV show by TMDB ID."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM movies WHERE tmdb_id = ? AND is_approved = 1', (movie_id,))
+        movie = cursor.fetchone()
+        conn.close()
+        
+        if not movie:
+            raise HTTPException(status_code=404, detail="Movie not found")
+        
+        movie_dict = dict(movie)
+        
+        # Parse JSON fields
+        import json
+        if movie_dict.get('genres') and isinstance(movie_dict['genres'], str):
+            movie_dict['genres'] = json.loads(movie_dict['genres'])
+        if movie_dict.get('cast') and isinstance(movie_dict['cast'], str):
+            movie_dict['cast'] = json.loads(movie_dict['cast'])
+        if movie_dict.get('streaming_info') and isinstance(movie_dict['streaming_info'], str):
+            movie_dict['streaming_info'] = json.loads(movie_dict['streaming_info'])
+        if movie_dict.get('similar_movies') and isinstance(movie_dict['similar_movies'], str):
+            movie_dict['similar_movies'] = json.loads(movie_dict['similar_movies'])
+        
+        return movie_dict
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching movie {movie_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/movies/search")
+async def search_movies(query: str = Query(..., min_length=1), limit: int = Query(10, ge=1, le=50)):
+    """Search for movies/TV shows."""
+    try:
+        movie_fetcher = MovieFetcher()
+        results = await movie_fetcher.search_movies(query)
+        return {
+            "query": query,
+            "results": results[:limit],
+            "count": len(results[:limit])
+        }
+        
+    except Exception as e:
+        logger.error(f"Error searching movies: {e}")
+        return {"query": query, "results": [], "count": 0}
+
 
 @app.on_event("startup")
 async def startup_event():
