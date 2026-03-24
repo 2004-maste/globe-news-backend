@@ -2103,6 +2103,122 @@ async def get_trending_movies(limit: int = Query(20, ge=1, le=100), media_type: 
         logger.error(f"Error fetching trending movies: {e}")
         return {"movies": [], "count": 0}
 
+async def save_movies_to_db(movies_list):
+    """Save movies/TV shows to database using raw SQLite."""
+    import sqlite3
+    import json
+    from datetime import datetime
+    
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    cursor = conn.cursor()
+    saved_count = 0
+    
+    # Ensure movies table exists
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS movies (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tmdb_id INTEGER UNIQUE NOT NULL,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        original_title TEXT,
+        overview TEXT,
+        tagline TEXT,
+        poster_url TEXT,
+        backdrop_url TEXT,
+        release_date TEXT,
+        last_air_date TEXT,
+        runtime INTEGER,
+        number_of_seasons INTEGER,
+        number_of_episodes INTEGER,
+        rating REAL DEFAULT 0,
+        vote_count INTEGER DEFAULT 0,
+        popularity REAL DEFAULT 0,
+        language TEXT DEFAULT 'en',
+        genres TEXT,
+        cast TEXT,
+        director TEXT,
+        creator TEXT,
+        networks TEXT,
+        production_companies TEXT,
+        streaming_info TEXT,
+        preview_content TEXT,
+        human_summary TEXT,
+        is_approved BOOLEAN DEFAULT 1,
+        is_trending BOOLEAN DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_fetched TIMESTAMP,
+        similar_movies TEXT
+    )
+    ''')
+    
+    for movie in movies_list:
+        try:
+            # Check if movie already exists
+            cursor.execute('SELECT id FROM movies WHERE tmdb_id = ?', (movie.get('id'),))
+            existing = cursor.fetchone()
+            
+            # Convert lists to JSON strings
+            genres_json = json.dumps(movie.get('genres', []))
+            
+            if existing:
+                # Update existing movie
+                cursor.execute('''
+                    UPDATE movies SET
+                        title = ?, overview = ?, rating = ?, popularity = ?,
+                        poster_url = ?, backdrop_url = ?, release_date = ?,
+                        is_trending = ?, updated_at = ?, last_fetched = ?,
+                        genres = ?
+                    WHERE tmdb_id = ?
+                ''', (
+                    movie.get('title', '')[:500],
+                    movie.get('overview', '')[:5000],
+                    movie.get('rating', 0),
+                    movie.get('popularity', 0),
+                    movie.get('poster_url'),
+                    movie.get('backdrop_url'),
+                    movie.get('release_date'),
+                    1,  # is_trending
+                    datetime.now().isoformat(),
+                    datetime.now().isoformat(),
+                    genres_json,
+                    movie.get('id')
+                ))
+                saved_count += 1
+            else:
+                # Insert new movie
+                cursor.execute('''
+                    INSERT INTO movies (
+                        tmdb_id, type, title, original_title, overview,
+                        poster_url, backdrop_url, release_date, rating,
+                        popularity, language, genres, is_trending, created_at, last_fetched
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    movie.get('id'),
+                    movie.get('type', 'movie'),
+                    movie.get('title', '')[:500],
+                    movie.get('original_title', '')[:500],
+                    movie.get('overview', '')[:5000],
+                    movie.get('poster_url'),
+                    movie.get('backdrop_url'),
+                    movie.get('release_date'),
+                    movie.get('rating', 0),
+                    movie.get('popularity', 0),
+                    movie.get('language', 'en'),
+                    genres_json,
+                    1,  # is_trending
+                    datetime.now().isoformat(),
+                    datetime.now().isoformat()
+                ))
+                saved_count += 1
+                
+        except Exception as e:
+            logger.error(f"Error saving movie {movie.get('title')}: {e}")
+            continue
+    
+    conn.commit()
+    conn.close()
+    return saved_count
 
 @app.get("/api/v1/movies/{movie_id}")
 async def get_movie_details(movie_id: int):
