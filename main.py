@@ -26,7 +26,9 @@ import re
 import random
 import html
 import ssl
+import json  # ADDED: For JSON parsing
 from app.database import init_db
+from app.services.movie_fetcher import MovieFetcher  # ADDED: Movie fetcher import
 
 DB_PATH = os.environ.get('DB_PATH', '/app/data/globe_news.db')
 
@@ -93,47 +95,53 @@ def init_database():
             FOREIGN KEY (category_id) REFERENCES categories (id)
         )
         ''')
+
+        # Create movies table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS movies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tmdb_id INTEGER UNIQUE NOT NULL,
+            type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            original_title TEXT,
+            overview TEXT,
+            tagline TEXT,
+            poster_url TEXT,
+            backdrop_url TEXT,
+            release_date TEXT,
+            last_air_date TEXT,
+            runtime INTEGER,
+            number_of_seasons INTEGER,
+            number_of_episodes INTEGER,
+            rating REAL DEFAULT 0,
+            vote_count INTEGER DEFAULT 0,
+            popularity REAL DEFAULT 0,
+            language TEXT DEFAULT 'en',
+            genres TEXT,
+            cast TEXT,
+            director TEXT,
+            creator TEXT,
+            networks TEXT,
+            production_companies TEXT,
+            streaming_info TEXT,
+            preview_content TEXT,
+            human_summary TEXT,
+            is_approved BOOLEAN DEFAULT 1,
+            is_trending BOOLEAN DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_fetched TIMESTAMP,
+            similar_movies TEXT
+        )
+        ''')
+
+        # Creating indexes for movies
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_movies_tmdb_id ON movies(tmdb_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_movies_type ON movies(type)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_movies_is_trending ON movies(is_trending)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_movies_rating ON movies(rating)')
         
-        # Create movies table (commented out for now - will add later)
-        # cursor.execute('''
-        # CREATE TABLE IF NOT EXISTS movies (
-        #     id INTEGER PRIMARY KEY AUTOINCREMENT,
-        #     tmdb_id INTEGER UNIQUE NOT NULL,
-        #     type TEXT NOT NULL,
-        #     title TEXT NOT NULL,
-        #     original_title TEXT,
-        #     overview TEXT,
-        #     tagline TEXT,
-        #     poster_url TEXT,
-        #     backdrop_url TEXT,
-        #     release_date TEXT,
-        #     last_air_date TEXT,
-        #     runtime INTEGER,
-        #     number_of_seasons INTEGER,
-        #     number_of_episodes INTEGER,
-        #     rating REAL DEFAULT 0,
-        #     vote_count INTEGER DEFAULT 0,
-        #     popularity REAL DEFAULT 0,
-        #     language TEXT DEFAULT 'en',
-        #     genres TEXT,
-        #     cast TEXT,
-        #     director TEXT,
-        #     creator TEXT,
-        #     networks TEXT,
-        #     production_companies TEXT,
-        #     streaming_info TEXT,
-        #     preview_content TEXT,
-        #     human_summary TEXT,
-        #     is_approved BOOLEAN DEFAULT 1,
-        #     is_trending BOOLEAN DEFAULT 0,
-        #     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        #     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        #     last_fetched TIMESTAMP,
-        #     similar_movies TEXT
-        # )
-        # ''')
-        
-        # Check and add missing columns
+        # Checking and adding missing columns
         cursor.execute("PRAGMA table_info(articles)")
         existing_columns = [column[1] for column in cursor.fetchall()]
         
@@ -1413,6 +1421,110 @@ async def background_fetcher():
             logger.error(f"Error in background fetcher: {e}")
             await asyncio.sleep(600)
 
+
+async def background_movie_fetcher():
+    """Background task to fetch trending movies and TV shows hourly."""
+    logger.info("Starting background movie fetcher...")
+    
+    await asyncio.sleep(30)  # Wait 30 seconds after startup
+    
+    while True:
+        try:
+            movie_fetcher = MovieFetcher()
+            
+            # Fetch trending movies
+            trending_movies = await movie_fetcher.fetch_trending('movie', 'day')
+            logger.info(f"Fetched {len(trending_movies)} trending movies")
+            
+            # Fetch trending TV shows
+            trending_tv = await movie_fetcher.fetch_trending('tv', 'day')
+            logger.info(f"Fetched {len(trending_tv)} trending TV shows")
+            
+            # Save to database
+            saved_count = await save_movies_to_db(trending_movies + trending_tv)
+            logger.info(f"Background movie fetch: Saved {saved_count} new/updated movies")
+            
+            await asyncio.sleep(3600)  # Run every hour
+            
+        except Exception as e:
+            logger.error(f"Error in background movie fetcher: {e}")
+            await asyncio.sleep(600)  # Wait 10 minutes on error
+
+
+async def save_movies_to_db(movies_list):
+    """Save movies/TV shows to database using raw SQLite."""
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    cursor = conn.cursor()
+    saved_count = 0
+    
+    for movie in movies_list:
+        try:
+            # Check if movie already exists
+            cursor.execute('SELECT id FROM movies WHERE tmdb_id = ?', (movie.get('id'),))
+            existing = cursor.fetchone()
+            
+            # Convert genres to JSON string
+            genres_json = json.dumps(movie.get('genres', []))
+            
+            if existing:
+                # Update existing movie
+                cursor.execute('''
+                    UPDATE movies SET
+                        title = ?, overview = ?, rating = ?, popularity = ?,
+                        poster_url = ?, backdrop_url = ?, release_date = ?,
+                        is_trending = ?, updated_at = ?, last_fetched = ?,
+                        genres = ?
+                    WHERE tmdb_id = ?
+                ''', (
+                    movie.get('title', '')[:500],
+                    movie.get('overview', '')[:5000],
+                    movie.get('rating', 0),
+                    movie.get('popularity', 0),
+                    movie.get('poster_url'),
+                    movie.get('backdrop_url'),
+                    movie.get('release_date'),
+                    1,  # is_trending
+                    datetime.now().isoformat(),
+                    datetime.now().isoformat(),
+                    genres_json,
+                    movie.get('id')
+                ))
+                saved_count += 1
+            else:
+                # Insert new movie
+                cursor.execute('''
+                    INSERT INTO movies (
+                        tmdb_id, type, title, original_title, overview,
+                        poster_url, backdrop_url, release_date, rating,
+                        popularity, language, genres, is_trending, created_at, last_fetched
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    movie.get('id'),
+                    movie.get('type', 'movie'),
+                    movie.get('title', '')[:500],
+                    movie.get('original_title', '')[:500],
+                    movie.get('overview', '')[:5000],
+                    movie.get('poster_url'),
+                    movie.get('backdrop_url'),
+                    movie.get('release_date'),
+                    movie.get('rating', 0),
+                    movie.get('popularity', 0),
+                    movie.get('language', 'en'),
+                    genres_json,
+                    1,  # is_trending
+                    datetime.now().isoformat(),
+                    datetime.now().isoformat()
+                ))
+                saved_count += 1
+                
+        except Exception as e:
+            logger.error(f"Error saving movie {movie.get('title')}: {e}")
+            continue
+    
+    conn.commit()
+    conn.close()
+    return saved_count
+
 # ==================== FASTAPI APP ====================
 
 @asynccontextmanager
@@ -1444,15 +1556,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Error checking database: {e}")
     
-    # Start background tasks - ONLY NEWS FOR NOW
-    task = asyncio.create_task(background_fetcher())
-    # Movie fetcher will be added later
+    # Start background tasks
+    news_task = asyncio.create_task(background_fetcher())
+    movie_task = asyncio.create_task(background_movie_fetcher())
     
     yield
     
     # Shutdown
     logger.info("Shutting down Globe News API...")
-    task.cancel()
+    news_task.cancel()
+    movie_task.cancel()
 
 # Create FastAPI app
 app = FastAPI(
@@ -1464,14 +1577,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# ==================== SESSION MIDDLEWARE ====================
+# ==================== FIXED: SESSION MIDDLEWARE (ADDED) ====================
+# THIS IS THE CRITICAL FIX FOR THE ADMIN HUMAN SUMMARY FEATURE
 app.add_middleware(
     SessionMiddleware,
     secret_key=os.environ.get("SECRET_KEY", "globe-news-secret-key-change-this-in-production-2026"),
     session_cookie="globe_news_admin_session",
-    max_age=86400,
+    max_age=86400,  # 24 hours in seconds
     same_site="lax",
-    https_only=False,
+    https_only=False,  # Set to True in production with HTTPS
 )
 
 # CORS middleware
@@ -1483,7 +1597,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ADMIN ROUTES
+# ADMIN ROUTES - MUST BE AFTER SESSION MIDDLEWARE
 app.include_router(admin.router)
 
 # ==================== API ENDPOINTS ====================
@@ -1516,6 +1630,10 @@ async def root():
         ''')
         sources = cursor.fetchall()
         
+        # Get movie stats
+        cursor.execute('SELECT COUNT(*) FROM movies')
+        movie_count = cursor.fetchone()[0]
+        
         conn.close()
         
         return {
@@ -1528,7 +1646,8 @@ async def root():
                 "english_articles": english,
                 "kinyarwanda_articles": kinyarwanda,
                 "full_content_extracted": full_content_extracted,
-                "content_extraction_rate": f"{(full_content_extracted/total*100):.1f}%" if total > 0 else "0%"
+                "content_extraction_rate": f"{(full_content_extracted/total*100):.1f}%" if total > 0 else "0%",
+                "total_movies": movie_count
             },
             "top_sources": [dict(s) for s in sources],
             "features": [
@@ -1539,7 +1658,8 @@ async def root():
                 "Automatic hourly updates",
                 "Article-specific context analysis",
                 "Admin approval workflow for AdSense compliance",
-                "Human summary editing for articles"
+                "Human summary editing for articles",
+                "Trending movies and TV shows from TMDB"  # Added movie feature
             ],
             "content_extraction": {
                 "library": "readability-lxml (if available)",
@@ -1581,6 +1701,7 @@ async def get_articles(
         conn = get_db_connection()
         cursor = conn.cursor()
         
+        # Build query - only show approved articles
         query = '''
             SELECT a.*, c.name as category_name 
             FROM articles a 
@@ -1602,12 +1723,14 @@ async def get_articles(
             search_term = f'%{search}%'
             params.extend([search_term, search_term, search_term])
         
+        # Order and paginate
         query += ' ORDER BY a.published_at DESC LIMIT ? OFFSET ?'
         params.extend([limit, skip])
         
         cursor.execute(query, params)
         articles = cursor.fetchall()
         
+        # Get total count
         count_query = 'SELECT COUNT(*) FROM articles a LEFT JOIN categories c ON a.category_id = c.id WHERE a.is_approved = 1'
         count_params = []
         
@@ -1627,6 +1750,7 @@ async def get_articles(
         cursor.execute(count_query, count_params)
         total = cursor.fetchone()[0]
         
+        # Convert to dict
         result = []
         for article in articles:
             article_dict = dict(article)
@@ -1638,6 +1762,7 @@ async def get_articles(
             article_dict.setdefault('full_content', None)
             article_dict.setdefault('human_summary', None)
             
+            # Add content length info
             if article_dict.get('full_content'):
                 article_dict['content_length'] = len(article_dict['full_content'])
                 article_dict['has_full_content'] = len(article_dict['full_content']) > len(article_dict.get('content', '')) + 100
@@ -1680,6 +1805,7 @@ async def get_article(article_id: int):
             conn.close()
             raise HTTPException(status_code=404, detail="Article not found")
         
+        # Convert to dictionary
         article_dict = dict(article)
         article_dict.setdefault('category_name', 'General')
         article_dict.setdefault('language', 'en')
@@ -1689,6 +1815,7 @@ async def get_article(article_id: int):
         article_dict.setdefault('full_content', None)
         article_dict.setdefault('human_summary', None)
         
+        # Add content info
         if article_dict.get('full_content'):
             article_dict['has_full_content'] = True
             article_dict['content_length'] = len(article_dict['full_content'])
@@ -1696,6 +1823,7 @@ async def get_article(article_id: int):
             article_dict['has_full_content'] = False
             article_dict['content_length'] = len(article_dict.get('content', ''))
         
+        # Get related articles
         language = article_dict.get('language', 'en')
         category_id = article_dict.get('category_id', 1)
         
@@ -1710,6 +1838,7 @@ async def get_article(article_id: int):
         
         related = cursor.fetchall()
         
+        # Convert related articles to dict
         related_list = []
         for rel in related:
             rel_dict = dict(rel)
@@ -1817,6 +1946,10 @@ async def get_fetcher_stats():
         latest_date_result = cursor.fetchone()[0]
         latest_date = latest_date_result if latest_date_result else datetime.now().isoformat()
         
+        # Movie stats
+        cursor.execute('SELECT COUNT(*) FROM movies')
+        movie_count = cursor.fetchone()[0]
+        
         conn.close()
         
         return {
@@ -1830,7 +1963,8 @@ async def get_fetcher_stats():
             "latest_article_date": latest_date,
             "configured_feeds": len(RSS_FEEDS),
             "content_extraction_enabled": Document is not None,
-            "admin_workflow": "Articles require approval before public viewing"
+            "admin_workflow": "Articles require approval before public viewing",
+            "movie_count": movie_count
         }
         
     except Exception as e:
@@ -1845,7 +1979,8 @@ async def get_fetcher_stats():
             "with_human_summary": 0,
             "latest_article_date": None,
             "configured_feeds": len(RSS_FEEDS),
-            "content_extraction_enabled": Document is not None
+            "content_extraction_enabled": Document is not None,
+            "movie_count": 0
         }
 
 @app.post("/api/v1/fetcher/fetch-now")
@@ -1892,6 +2027,7 @@ async def get_article_preview(article_id: int):
         
         article_dict = dict(article)
         
+        # Check if human summary exists (priority)
         if article_dict.get('human_summary'):
             conn.close()
             return {
@@ -1903,6 +2039,7 @@ async def get_article_preview(article_id: int):
                 "preview_type": "human"
             }
         
+        # Check if smart preview already exists
         if article_dict.get('preview_content'):
             conn.close()
             return {
@@ -1914,6 +2051,7 @@ async def get_article_preview(article_id: int):
                 "preview_type": "smart"
             }
         
+        # Generate smart preview
         preview = ContentAnalyzer.generate_preview(
             title=article_dict.get('title', ''),
             description=article_dict.get('description', ''),
@@ -1925,6 +2063,7 @@ async def get_article_preview(article_id: int):
             author=article_dict.get('author', '')
         )
         
+        # Save preview
         cursor.execute(
             'UPDATE articles SET preview_content = ? WHERE id = ?',
             (preview, article_id)
@@ -1969,6 +2108,7 @@ async def generate_preview(article_id: int):
         
         article_dict = dict(article)
         
+        # Generate smart preview
         preview = ContentAnalyzer.generate_preview(
             title=article_dict.get('title', ''),
             description=article_dict.get('description', ''),
@@ -1980,6 +2120,7 @@ async def generate_preview(article_id: int):
             author=article_dict.get('author', '')
         )
         
+        # Save preview
         cursor.execute(
             'UPDATE articles SET preview_content = ? WHERE id = ?',
             (preview, article_id)
@@ -2004,12 +2145,14 @@ async def generate_preview(article_id: int):
             "message": "Failed to generate preview"
         }
 
+# ✅ NEW: Content extraction debug endpoint
 @app.get("/api/v1/debug/extract-test")
 async def debug_extract_test(url: str = Query(..., description="URL to test content extraction")):
     """Test content extraction on a specific URL."""
     try:
         fetcher = NewsFetcher()
         
+        # Extract content
         start_time = datetime.now()
         content = await fetcher.extract_full_content(url, "Test description", "Test Source")
         extraction_time = (datetime.now() - start_time).total_seconds()
@@ -2028,6 +2171,107 @@ async def debug_extract_test(url: str = Query(..., description="URL to test cont
             "error": str(e),
             "success": False
         }
+
+# ==================== MOVIE ENDPOINTS ====================
+
+@app.get("/api/v1/movies/trending")
+async def get_trending_movies(limit: int = Query(20, ge=1, le=100), media_type: str = Query('all', regex='^(all|movie|tv)$')):
+    """Get trending movies and TV shows from database."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        if media_type == 'all':
+            cursor.execute('''
+                SELECT * FROM movies 
+                WHERE is_approved = 1 
+                ORDER BY popularity DESC 
+                LIMIT ?
+            ''', (limit,))
+        else:
+            cursor.execute('''
+                SELECT * FROM movies 
+                WHERE type = ? AND is_approved = 1 
+                ORDER BY popularity DESC 
+                LIMIT ?
+            ''', (media_type, limit))
+        
+        movies = cursor.fetchall()
+        conn.close()
+        
+        result = []
+        for movie in movies:
+            movie_dict = dict(movie)
+            # Parse JSON fields
+            if movie_dict.get('genres') and isinstance(movie_dict['genres'], str):
+                movie_dict['genres'] = json.loads(movie_dict['genres'])
+            if movie_dict.get('streaming_info') and isinstance(movie_dict['streaming_info'], str):
+                movie_dict['streaming_info'] = json.loads(movie_dict['streaming_info'])
+            
+            result.append(movie_dict)
+        
+        return {
+            "movies": result,
+            "count": len(result),
+            "type": media_type
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching trending movies: {e}")
+        return {"movies": [], "count": 0}
+
+
+@app.get("/api/v1/movies/{movie_id}")
+async def get_movie_details(movie_id: int):
+    """Get detailed movie/TV show by TMDB ID."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM movies WHERE tmdb_id = ? AND is_approved = 1', (movie_id,))
+        movie = cursor.fetchone()
+        conn.close()
+        
+        if not movie:
+            raise HTTPException(status_code=404, detail="Movie not found")
+        
+        movie_dict = dict(movie)
+        
+        # Parse JSON fields
+        if movie_dict.get('genres') and isinstance(movie_dict['genres'], str):
+            movie_dict['genres'] = json.loads(movie_dict['genres'])
+        if movie_dict.get('cast') and isinstance(movie_dict['cast'], str):
+            movie_dict['cast'] = json.loads(movie_dict['cast'])
+        if movie_dict.get('streaming_info') and isinstance(movie_dict['streaming_info'], str):
+            movie_dict['streaming_info'] = json.loads(movie_dict['streaming_info'])
+        if movie_dict.get('similar_movies') and isinstance(movie_dict['similar_movies'], str):
+            movie_dict['similar_movies'] = json.loads(movie_dict['similar_movies'])
+        
+        return movie_dict
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching movie {movie_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/movies/search")
+async def search_movies(query: str = Query(..., min_length=1), limit: int = Query(10, ge=1, le=50)):
+    """Search for movies/TV shows."""
+    try:
+        movie_fetcher = MovieFetcher()
+        results = await movie_fetcher.search_movies(query)
+        return {
+            "query": query,
+            "results": results[:limit],
+            "count": len(results[:limit])
+        }
+        
+    except Exception as e:
+        logger.error(f"Error searching movies: {e}")
+        return {"query": query, "results": [], "count": 0}
+
 
 @app.on_event("startup")
 async def startup_event():
